@@ -14,6 +14,20 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
 const OUT = path.join(ROOT, 'docs');
 
+const copyAssets = () => {
+  fs.mkdirSync(path.join(OUT, 'data'), { recursive: true });
+  for (const f of fs.readdirSync(PUBLIC)) fs.copyFileSync(path.join(PUBLIC, f), path.join(OUT, f));
+  fs.writeFileSync(path.join(OUT, '.nojekyll'), ''); // _ 로 시작하는 파일도 서빙되게
+};
+
+// --assets: 화면 코드만 docs/ 로 복사한다. 인증키도, API 호출도 필요 없다.
+// 코드를 고치면 곧바로 사이트에 반영하기 위한 경로.
+if (process.argv.includes('--assets')) {
+  copyAssets();
+  log('화면 코드만 docs/ 로 복사했습니다 (데이터는 그대로).');
+  process.exit(0);
+}
+
 const key = getServiceKey();
 if (!key) {
   console.error('인증키가 없습니다. config.json 을 만들거나 APPLYHOME_SERVICE_KEY 를 지정하세요.');
@@ -42,10 +56,8 @@ const snapshot = {
 };
 
 fs.rmSync(OUT, { recursive: true, force: true });
-fs.mkdirSync(path.join(OUT, 'data'), { recursive: true });
-for (const f of fs.readdirSync(PUBLIC)) fs.copyFileSync(path.join(PUBLIC, f), path.join(OUT, f));
+copyAssets();
 fs.writeFileSync(path.join(OUT, 'data', 'listings.json'), JSON.stringify(snapshot));
-fs.writeFileSync(path.join(OUT, '.nojekyll'), ''); // _ 로 시작하는 파일도 서빙되게
 
 const kb = (fs.statSync(path.join(OUT, 'data', 'listings.json')).size / 1024).toFixed(0);
 const byCorner = {};

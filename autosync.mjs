@@ -43,7 +43,16 @@ async function sync() {
     if (!git('diff', '--cached', '--name-only')) { syncing = false; return; }
     if (!stagedLooksSafe()) { git('reset'); syncing = false; return; }
 
-    const files = git('diff', '--cached', '--name-only').split('\n').filter(Boolean);
+    let files = git('diff', '--cached', '--name-only').split('\n').filter(Boolean);
+
+    // 화면 코드를 고쳤으면 docs/ 에도 반영해야 사이트가 따라온다.
+    // 데이터는 건드리지 않으므로 인증키도 API 호출도 필요 없다.
+    if (files.some((f) => f.startsWith('public/'))) {
+      execFileSync('node', ['build.mjs', '--assets'], { cwd: ROOT, encoding: 'utf8' });
+      git('add', '-A');
+      files = git('diff', '--cached', '--name-only').split('\n').filter(Boolean);
+      log('화면 코드 변경 → docs/ 재생성');
+    }
     const summary = files.length <= 3 ? files.join(', ') : `${files.slice(0, 3).join(', ')} 외 ${files.length - 3}개`;
     const stamp = new Date().toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' });
 
