@@ -32,7 +32,16 @@ cd ~/Desktop/seoul-cheongyak
 
 `config.json`은 `.gitignore`에 들어 있어 커밋되지 않습니다. 인증키는 이 컴퓨터를 벗어나지 않습니다.
 
-### 자동 갱신
+### 코드 자동 동기화
+
+`start.sh`는 서버와 함께 `autosync.mjs`를 띄웁니다. 이 폴더의 파일을 고치면 **8초 뒤 알아서 커밋하고 GitHub에 푸시**합니다.
+`config.json`·`.env`·`cache/`는 감시에서 제외되고, 커밋 직전에 인증키 문자열이 섞이지 않았는지 한 번 더 확인한 뒤에만 올립니다.
+
+- 자동 푸시를 끄고 싶으면 `NO_AUTOSYNC=1 ./start.sh`
+- 원할 때만 올리고 싶으면 `./sync.sh` (한 번 커밋 + 푸시)
+- 대기 시간을 바꾸려면 `AUTOSYNC_DEBOUNCE_MS=30000 ./start.sh`
+
+### 데이터 자동 갱신
 
 서버가 **30분마다** 공고 목록을 다시 받아오고, 화면은 3분마다(그리고 탭으로 돌아올 때마다) 서버 상태를 따라갑니다.
 상세 정보(주택형·분양가·경쟁률)는 6시간 캐시라, 접수가 끝난 단지의 경쟁률이 공개되면 알아서 채워집니다.
@@ -63,6 +72,8 @@ cd ~/Desktop/seoul-cheongyak
 
 ```
 server.mjs      HTTP 서버 + 청약홈 API 프록시 + 디스크 캐시
+autosync.mjs    파일 변경 감시 → 자동 커밋·푸시
+sync.sh         수동 커밋·푸시
 api.mjs         공공데이터포털 OpenAPI 클라이언트 (분양정보 10종 / 경쟁률 8종)
 normalize.mjs   원본 레코드 → 화면용 단일 스키마
 store.mjs       config.json · cache/ 관리
