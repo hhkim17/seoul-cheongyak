@@ -14,16 +14,24 @@ const SITE = 'https://hhkim17.github.io/seoul-cheongyak/';
 
 const read = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
 
+// --test: 새 공고가 없어도 최근 공고로 메일을 만들어 발송 경로를 점검한다
+const TEST = process.argv.includes('--test');
+
 const prev = read(process.argv[2] || path.join(ROOT, '.prev-listings.json'));
 const curr = read(path.join(ROOT, 'docs', 'data', 'listings.json'));
 const watch = read(path.join(ROOT, 'watch.json')) || {};
 
 if (!curr) { console.error('빌드 결과가 없습니다.'); process.exit(1); }
-if (!prev) { console.log('비교할 이전 스냅샷이 없습니다 — 첫 실행으로 보고 알림을 보내지 않습니다.'); process.exit(0); }
+if (!prev && !TEST) { console.log('비교할 이전 스냅샷이 없습니다 — 첫 실행으로 보고 알림을 보내지 않습니다.'); process.exit(0); }
 
-const known = new Set((prev.listings || []).map((l) => l.id));
-const fresh = (curr.listings || []).filter((l) => !known.has(l.id));
+const known = new Set((prev?.listings || []).map((l) => l.id));
+let fresh = (curr.listings || []).filter((l) => !known.has(l.id));
 console.log(`새 공고 ${fresh.length}건 (전체 ${curr.listings.length}건)`);
+
+if (TEST && !fresh.length) {
+  fresh = [...curr.listings].sort((a, b) => (b.noticeDate || '').localeCompare(a.noticeDate || '')).slice(0, 5);
+  console.log(`[테스트] 새 공고가 없어 최근 ${fresh.length}건으로 발송 경로를 점검합니다.`);
+}
 
 // ── 조건 맞추기 ──────────────────────────────────────────────────────
 const RENTAL = new Set(['RENT', 'LH_RENT', 'LH_WELFARE', 'MYHOME_RENT', 'SH', 'HUG']);
@@ -103,7 +111,7 @@ const card = (l) => {
 
 const html = `<div style="font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;background:#f5f6f8;padding:24px">
   <div style="max-width:640px;margin:0 auto">
-    <h1 style="font-size:19px;color:#14171c;margin:0 0 4px">내 조건에 맞는 새 청약 공고 ${hits.length}건</h1>
+    <h1 style="font-size:19px;color:#14171c;margin:0 0 4px">${TEST ? '[테스트] ' : ''}내 조건에 맞는 새 청약 공고 ${hits.length}건</h1>
     <p style="font-size:13px;color:#7b8494;margin:0 0 20px">${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })} 기준</p>
     ${Object.entries(byCorner).map(([k, list]) => `
       <h2 style="font-size:13px;color:#7b8494;margin:22px 0 10px;text-transform:none">${esc(cornerLabel(k))} · ${list.length}건</h2>
@@ -119,5 +127,5 @@ const html = `<div style="font-family:-apple-system,'Apple SD Gothic Neo','Noto 
 fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, 'email.html'), html);
 fs.writeFileSync(path.join(OUT, 'subject.txt'),
-  `[서울청약] 내 조건 새 공고 ${hits.length}건 — ${hits.slice(0, 2).map((l) => l.name).join(', ')}${hits.length > 2 ? ' 외' : ''}`);
+  `${TEST ? '[테스트] ' : ''}[서울청약] 내 조건 새 공고 ${hits.length}건 — ${hits.slice(0, 2).map((l) => l.name).join(', ')}${hits.length > 2 ? ' 외' : ''}`);
 console.log('메일 본문을 만들었습니다: notify/email.html');

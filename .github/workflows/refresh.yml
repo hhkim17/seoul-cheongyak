@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '*/30 * * * *'   # 30분마다 (GitHub 사정에 따라 다소 지연될 수 있음)
   workflow_dispatch:          # 손으로 즉시 실행
+    inputs:
+      test_email:
+        description: '새 공고가 없어도 테스트 메일을 보낸다'
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths-ignore: ['docs/**']
@@ -46,7 +51,7 @@ jobs:
       - name: 내 조건에 맞는 새 공고 골라내기
         id: notify
         run: |
-          node notify.mjs /tmp/prev.json
+          node notify.mjs /tmp/prev.json ${{ inputs.test_email && '--test' || '' }}
           if [ -f notify/email.html ]; then
             echo "send=true" >> "$GITHUB_OUTPUT"
             echo "subject=$(cat notify/subject.txt)" >> "$GITHUB_OUTPUT"
