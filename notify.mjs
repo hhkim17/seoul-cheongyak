@@ -51,7 +51,9 @@ function matches(l) {
   if (corners.length && !corners.includes(l.corner)) return false;
   // 게시판 공고는 '당첨자 발표'·'안내'가 섞인다 — 알림은 모집공고만
   if (recruitOnly && l.noticeKind && l.noticeKind !== '모집') return false;
-  if (gus.length && !(l.gu && gus.includes(l.gu))) return false;
+  // 자치구를 알 수 없는 공고(게시판 수집분 등)는 지역 필터로 걸러내지 않는다.
+  // 걸러 버리면 SH 공고가 통째로 알림에서 빠진다.
+  if (gus.length && l.gu && !gus.includes(l.gu)) return false;
 
   const models = l.models || [];
   const rental = RENTAL.has(l.kind);
@@ -73,8 +75,12 @@ function matches(l) {
   return true;
 }
 
-const hits = fresh.filter(matches);
+let hits = fresh.filter(matches);
 console.log(`조건에 맞는 새 공고 ${hits.length}건`);
+if (!hits.length && TEST) {
+  hits = fresh.slice(0, 3);
+  console.log(`[테스트] 조건에 맞는 건이 없어 최근 ${hits.length}건으로 발송을 시험합니다.`);
+}
 if (!hits.length) process.exit(0);
 
 // ── 메일 본문 ────────────────────────────────────────────────────────
