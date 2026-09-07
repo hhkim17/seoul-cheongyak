@@ -70,12 +70,16 @@ export async function signInWithKakao() {
   if (providers && !providers.includes('kakao')) {
     throw new Error('카카오 로그인이 아직 켜져 있지 않습니다. 아래 이메일 로그인을 쓰거나 Supabase에서 카카오 제공자를 켜 주세요.');
   }
-  // Supabase는 기본으로 카카오 이메일 동의(account_email)를 함께 요청하는데,
-  // 이메일 제공은 카카오 비즈앱 심사를 통과해야 열린다. 미신청 상태에서 요청하면
-  // KOE205가 난다. 그래서 닉네임만 받는다 — 알림용 이메일은 앱에서 따로 입력받는다.
+  // Supabase는 카카오에 account_email·profile_image·profile_nickname을 기본으로 요청한다.
+  // 이메일 동의항목은 카카오 비즈앱 심사를 통과해야 열려서, 그 전에는 KOE205가 난다.
+  // options.scopes는 기본값에 덧붙기만 하므로, queryParams로 scope를 직접 넘겨 통째로 바꾼다.
+  // (알림용 이메일은 앱에서 따로 입력받는다)
   const { error } = await client.auth.signInWithOAuth({
     provider: 'kakao',
-    options: { redirectTo: location.href.split('#')[0], scopes: 'profile_nickname' },
+    options: {
+      redirectTo: location.href.split('#')[0],
+      queryParams: { scope: 'profile_nickname' },
+    },
   });
   if (error) throw new Error(error.message);
 }
