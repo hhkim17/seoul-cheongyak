@@ -1,0 +1,53 @@
+name: 청약 데이터 갱신
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # 30분마다 (GitHub 사정에 따라 다소 지연될 수 있음)
+  workflow_dispatch:          # 손으로 즉시 실행
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 인증키 확인
+        env:
+          APPLYHOME_SERVICE_KEY: ${{ secrets.APPLYHOME_SERVICE_KEY }}
+        run: |
+          if [ -z "$APPLYHOME_SERVICE_KEY" ]; then
+            echo "::error::저장소 시크릿 APPLYHOME_SERVICE_KEY 가 없습니다."
+            echo "::error::gh secret set APPLYHOME_SERVICE_KEY --repo ${{ github.repository }}"
+            exit 1
+          fi
+
+      - name: 공고 수집 및 사이트 빌드
+        env:
+          APPLYHOME_SERVICE_KEY: ${{ secrets.APPLYHOME_SERVICE_KEY }}
+        run: node build.mjs
+
+      - name: 변경분 커밋
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if git diff --cached --quiet; then
+            echo "바뀐 공고가 없습니다."
+          else
+            git commit -m "청약 데이터 갱신 ($(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST'))"
+            git push
+          fi
