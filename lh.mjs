@@ -105,6 +105,33 @@ export async function lhNotices(serviceKey, { months = 14, cnpCd = SEOUL_CNP_CD,
   return out.filter((r) => { const k = `${r.PAN_ID}|${r.AIS_TP_CD}`; return seen.has(k) ? false : seen.add(k); });
 }
 
+/**
+ * LH 응답은 [{dsSch:[…]},{dsList01:[…]},{dsList01Nm:[…]},…] 꼴이다.
+ * 이름이 'Nm'으로 끝나는 배열은 컬럼 라벨이므로 데이터가 아니다.
+ * 조건에 맞는 첫 데이터 배열을 돌려준다.
+ */
+export function pickArray(json, predicate) {
+  for (const obj of Array.isArray(json) ? json : [json]) {
+    if (!obj || typeof obj !== 'object') continue;
+    for (const [key, val] of Object.entries(obj)) {
+      if (key.endsWith('Nm') || !Array.isArray(val) || !val.length) continue;
+      if (val.some(predicate)) return val.filter(predicate);
+    }
+  }
+  return [];
+}
+
+const num = (v) => Number.isFinite(Number(String(v ?? '').replace(/[^0-9.]/g, ''))) && String(v ?? '').match(/\d/);
+
+/** 주택형 행: 전용면적이 숫자인 행만 (라벨 행 '전용면적(㎡)' 배제) */
+export const isSupplyRow = (r) => r && (('HTY_NNA' in r) || ('DDO_AR' in r)) && num(r.DDO_AR);
+/** 첨부 행 */
+export const isFileRow = (r) => r && typeof r.AHFL_URL === 'string' && /^https?:/.test(r.AHFL_URL);
+/** 일정 행 */
+export const isScheduleRow = (r) => r && ('SBSC_ACP_ST_DT' in r) && /\d/.test(String(r.SBSC_ACP_ST_DT ?? ''));
+/** 단지 행 */
+export const isComplexRow = (r) => r && ('LGDN_ADR' in r) && String(r.LGDN_ADR ?? '').length > 3;
+
 /** 공고별 공급정보(주택형·세대수·임대조건) */
 export async function lhSupply(serviceKey, { panId, uppCd, aisTpCd, splInfTpCd, ccrCd }) {
   const json = await call('lhLeaseNoticeSplInfo1/getLeaseNoticeSplInfo1', serviceKey, {

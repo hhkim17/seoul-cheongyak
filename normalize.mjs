@@ -271,28 +271,46 @@ export function normalizeLh(r) {
   };
 }
 
-/** LH 공급정보 → 주택형 모델. 필드명이 확정적이지 않아 후보를 넓게 본다. */
+/** LH 공급정보(dsList01) → 주택형 모델. '공고문 참조' 같은 문자열은 금액 없음으로 둔다. */
 export function normalizeLhModel(m) {
-  const ty = pick(m, 'HSH_NM', 'HTY_NM', 'LND_US_DS_CD_NM', 'BLK_NM') || '주택형';
-  const ar = n(pick(m, 'AR', 'EXCLUSE_AR', 'SPL_AR', 'DDO_AR'));
-  const units = n(pick(m, 'SPL_HSH_CNT', 'SPL_CNT', 'HSH_CNT', 'LNO'));
-  const price = n(pick(m, 'SPL_XPC_AMT', 'SPL_AMT'));        // 원 단위로 오는 경우가 많다
-  const deposit = n(pick(m, 'LS_GMY', 'RRTA_GMY', 'GMY'));   // 임대보증금
-  const monthly = n(pick(m, 'MTH_RT_GMY', 'MT_RT_GMY'));     // 월임대료
-  const toManwon = (v) => (v == null ? null : v >= 1000000 ? Math.round(v / 10000) : v);
-
+  const won = (v) => { const x = n(v); return x == null ? null : x >= 10000 ? Math.round(x / 10000) : x; };
   return {
-    modelNo: pick(m, 'LNO', 'SPL_INF_TP_CD') || ty,
-    houseType: ty,
-    exclusiveArea: ar,
-    supplyArea: null,
-    generalUnits: units ?? 0,
+    modelNo: pick(m, 'HTY_NNA') || pick(m, 'SBD_LGO_NM'),
+    houseType: [pick(m, 'SBD_LGO_NM'), pick(m, 'HTY_NNA')].filter(Boolean).join(' · ') || '주택형',
+    exclusiveArea: n(pick(m, 'DDO_AR')),
+    supplyArea: n(pick(m, 'SPL_AR')),
+    generalUnits: n(pick(m, 'NOW_HSH_CNT', 'HSH_CNT')) ?? 0,
     specialUnits: 0,
     special: {},
-    priceManwon: toManwon(price),
-    depositManwon: toManwon(deposit),
-    monthlyManwon: toManwon(monthly),
+    priceManwon: null,
+    depositManwon: won(pick(m, 'LS_GMY')),   // '공고문 참조'면 null
+    monthlyManwon: won(pick(m, 'RFE')),
   };
+}
+
+/** LH 상세의 일정 행 → 공고 일정 */
+export function lhScheduleOf(rows) {
+  const first = (k) => { for (const r of rows) { const v = toISO(pick(r, k)); if (v) return v; } return null; };
+  return {
+    receiptStart: first('SBSC_ACP_ST_DT'),
+    receiptEnd: first('SBSC_ACP_CLSG_DT'),
+    docStart: first('PPR_ACP_ST_DT'),
+    docEnd: first('PPR_ACP_CLSG_DT'),
+    resultDate: first('PZWR_ANC_DT'),
+    contractStart: first('CTRT_ST_DT'),
+    contractEnd: first('CTRT_ED_DT'),
+    acceptNote: rows.map((r) => pick(r, 'ACP_DTTM')).find(Boolean) || '',
+  };
+}
+
+/** LH 상세의 첨부 행 → 파일 목록 */
+export function lhFilesOf(rows) {
+  const seen = new Set();
+  return rows.map((r) => ({
+    name: pick(r, 'CMN_AHFL_NM') || pick(r, 'LS_SPL_INF_UPL_FL_DS_CD_NM') || '첨부파일',
+    kind: pick(r, 'LS_SPL_INF_UPL_FL_DS_CD_NM'),
+    url: pick(r, 'AHFL_URL'),
+  })).filter((f) => f.url && (seen.has(f.url) ? false : seen.add(f.url)));
 }
 
 /** LH 상세 응답 어디에 있든 첨부파일(파일명 + URL) 쌍을 긁어낸다 */
