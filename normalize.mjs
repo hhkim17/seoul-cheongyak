@@ -311,51 +311,61 @@ export function extractAttachments(node, out = []) {
 }
 
 // ── 마이홈포털 통합 공고 정규화 ──────────────────────────────────────
-// 필드명이 문서와 실제가 다를 수 있어 후보 키를 넓게 본다.
-const RENT_HINT = /임대|행복|국민|영구|매입|전세/;
-
+// 필드명은 실제 응답에서 확인한 것을 쓴다.
 export function normalizeMyhome(r, kindHint) {
-  const name = pick(r, 'pblancNm', 'rcritNtcNm', 'houseNm', 'sujiNm', 'ntcNm', 'pblancTitle', 'title');
-  const inst = pick(r, 'suplyInstNm', 'instNm', 'operInstNm', 'bsnsMbyNm', 'insttNm');
-  const region = pick(r, 'brtcNm', 'ctprvnNm', 'sidoNm');
-  const sgg = pick(r, 'signguNm', 'sggNm');
-  const addr = pick(r, 'rnAdres', 'lcAdres', 'adres', 'hshldAdres') || [region, sgg].filter(Boolean).join(' ');
-  const type = pick(r, 'houseTyNm', 'suplyTyNm', 'rnkNm', 'aisTpCdNm', 'pblancTyNm');
-  const url = pick(r, 'dtlUrl', 'pblancUrl', 'ntcUrl', 'url', 'detailUrl');
-  const id = pick(r, 'pblancId', 'rcritNtcId', 'panId', 'ntcId', 'pblancNo') || `${name}|${pick(r, 'pblancBeginDe', 'rcritPblancDe')}`;
-  const kind = kindHint || (RENT_HINT.test(`${type}${name}`) ? 'MYHOME_RENT' : 'MYHOME_SALE');
+  const id = `${pick(r, 'pblancId')}_${pick(r, 'houseSn') || '0'}`;
+  const inst = pick(r, 'suplyInsttNm');                    // LH / SH / 지방공사
+  const addr = pick(r, 'fullAdres') || [pick(r, 'brtcNm'), pick(r, 'signguNm')].filter(Boolean).join(' ');
+  const supplyTy = pick(r, 'suplyTyNm');                   // 매입임대 / 행복주택 / 국민임대 …
+  const houseTy = pick(r, 'houseTyNm');                    // 아파트 / 다가구주택 …
+  const kind = kindHint || (supplyTy ? 'MYHOME_RENT' : 'MYHOME_SALE');
+  const money = (v) => { const x = n(v); return x ? Math.round(x / 10000) : null; };  // 원 → 만원
+  const units = n(pick(r, 'sumSuplyCo', 'totHshldCo'));
+  const name = pick(r, 'pblancNm');
 
-  const notice = toISO(pick(r, 'pblancBeginDe', 'rcritPblancDe', 'pblancDe', 'ntcDe'));
-  const start = toISO(pick(r, 'rceptBeginDe', 'sbscrptRceptBgnde', 'rcritBeginDe')) || notice;
-  const end = toISO(pick(r, 'rceptEndDe', 'sbscrptRceptEndde', 'rcritEndDe', 'pblancEndDe'));
+  const model = {
+    modelNo: id,
+    houseType: houseTy || supplyTy || '전체',
+    exclusiveArea: null, supplyArea: null,
+    generalUnits: units ?? 0, specialUnits: 0, special: {},
+    priceManwon: kind === 'MYHOME_SALE' ? money(pick(r, 'surlus')) : null,
+    depositManwon: money(pick(r, 'rentGtn')),
+    monthlyManwon: money(pick(r, 'mtRntchrg')),
+  };
 
   return {
     kind,
-    kindLabel: type || (kind === 'MYHOME_RENT' ? '공공임대' : '공공분양'),
+    kindLabel: supplyTy || houseTy || (kind === 'MYHOME_RENT' ? '공공임대' : '공공분양'),
     source: 'MYHOME',
-    houseManageNo: id, pblancNo: id, id: `${kind}:${id}`,
-    name: name || '(공고명 없음)',
-    areaName: region || '서울',
+    houseManageNo: pick(r, 'pblancId'), pblancNo: pick(r, 'pblancId'), id: `${kind}:${id}`,
+    name: name || pick(r, 'hsmpNm') || '(공고명 없음)',
+    areaName: pick(r, 'brtcNm') || '서울',
     address: addr,
     gu: guFromAddress(addr) || guFromAddress(name),
-    totalUnits: n(pick(r, 'suplyHshldco', 'totSuplyHshldco', 'hshldCo')),
-    noticeDate: notice,
-    receiptStart: start, receiptEnd: end,
-    rank1Start: start, rank1End: end,
-    resultDate: toISO(pick(r, 'przwnerPresnatnDe', 'przwnerDe')),
-    contractStart: null, contractEnd: null, moveIn: pick(r, 'mvnPrearngeYm'),
-    developer: inst || '공공주택사업자', builder: '',
-    tel: pick(r, 'telno', 'cntcTelno', 'mdhsTelno'),
-    homepage: '', noticeUrl: url,
-    subType: type,
+    totalUnits: units,
+    noticeDate: toISO(pick(r, 'rcritPblancDe')),
+    receiptStart: toISO(pick(r, 'beginDe')),
+    receiptEnd: toISO(pick(r, 'endDe')),
+    rank1Start: toISO(pick(r, 'beginDe')),
+    rank1End: toISO(pick(r, 'endDe')),
+    resultDate: toISO(pick(r, 'przwnerPresnatnDe')),
+    contractStart: null, contractEnd: null, moveIn: '',
+    developer: inst || '공공주택사업자',
+    builder: '', tel: pick(r, 'refrnc'),
+    homepage: pick(r, 'pcUrl'),
+    noticeUrl: pick(r, 'url') || pick(r, 'pcUrl'),
+    subType: [inst, pick(r, 'sttusNm')].filter(Boolean).join(' · '),
+    noticeKind: pick(r, 'sttusNm').includes('정정') ? '정정' : '모집',
+    heating: pick(r, 'heatMthdNm'),
     attachments: [],
-    models: [], cmpet: null, score: null,
-    flags: {},
+    models: (model.generalUnits || model.depositManwon || model.priceManwon) ? [model] : [],
+    cmpet: null, score: null, flags: {},
   };
 }
 
-/** 어느 필드든 '서울'이 들어 있으면 서울 공고로 본다 */
-export const myhomeIsSeoul = (r) => /서울/.test(JSON.stringify(r));
+/** 시도명 또는 주소로 서울 여부를 가린다 */
+export const myhomeIsSeoul = (r) =>
+  /서울/.test(String(r.brtcNm || '')) || String(r.fullAdres || '').startsWith('서울');
 
 // ── SH·HUG 게시판 수집분 정규화 ──────────────────────────────────────
 export function normalizeSh(r) {

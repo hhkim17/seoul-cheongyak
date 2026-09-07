@@ -53,16 +53,18 @@ async function call(op, serviceKey, params) {
 }
 
 /**
- * 지역 파라미터 이름이 문서마다 달라, 필터를 걸지 않고 받아 와서 서울만 골라낸다.
- * (전국 공고 수가 많지 않아 이 편이 오히려 안전하다)
+ * 전국 공고가 수백 건 규모라 지역 필터 없이 다 받아 와서 서울만 골라낸다.
+ * (지역 파라미터 이름이 문서에 명확치 않아 이 편이 안전하다)
  */
 async function listAll(op, serviceKey, { perPage = 500, maxPages = 6 } = {}) {
   const out = [];
   for (let page = 1; page <= maxPages; page++) {
     const json = await call(op, serviceKey, { numOfRows: String(perPage), pageNo: String(page) });
-    const rows = extractRows(json);
+    const body = json?.response?.body;
+    const rows = body ? [].concat(body.item ?? []) : extractRows(json);
     out.push(...rows);
-    if (rows.length < perPage) break;
+    const total = Number(body?.totalCount ?? out.length);
+    if (out.length >= total || rows.length === 0) break;
   }
   return out;
 }
