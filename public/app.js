@@ -154,6 +154,23 @@ const DEFAULT_PROFILE = {
 let profile = { ...DEFAULT_PROFILE, ...JSON.parse(localStorage.getItem('cheongyak.profile') || '{}') };
 const saveProfile = () => localStorage.setItem('cheongyak.profile', JSON.stringify(profile));
 
+// 스크랩(관심 공고) — 브라우저에 저장한다
+let scraps = new Set(JSON.parse(localStorage.getItem('cheongyak.scraps') || '[]'));
+const saveScraps = () => localStorage.setItem('cheongyak.scraps', JSON.stringify([...scraps]));
+function toggleScrap(id) {
+  scraps.has(id) ? scraps.delete(id) : scraps.add(id);
+  saveScraps(); renderAll();
+}
+
+// 메일 알림 조건 — 로컬 서버가 watch.json에 써 주고, 없으면 화면에서 복사
+const DEFAULT_WATCH = {
+  '코너': ['apt', 'remnant', 'publicrent', 'lhrent', 'lhsale', 'sh', 'hug'],
+  '관심자치구': [], '최대분양가_억': 12, '최대보증금_억': 5,
+  '전용면적_최소': 0, '전용면적_최대': 200,
+  '해당특별공급': [], '가격정보없어도_알림': true, '모집공고만': true,
+};
+let watchCfg = { ...DEFAULT_WATCH, ...JSON.parse(localStorage.getItem('cheongyak.watch') || '{}') };
+
 let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
 let listings = [];
 let meta = {};
@@ -327,9 +344,15 @@ function renderCorners() {
   const nav = $('#corners'); nav.innerHTML = '';
   // 상태 필터만 적용한 모수로 코너별 건수를 센다 (탭을 눌러도 숫자가 흔들리지 않게)
   const pool = listings.filter((l) => filters.status.includes(statusOf(l).key));
-  const count = (key) => key === 'all' ? pool.length : pool.filter((l) => cornerOf(l) === key).length;
+  const count = (key) => key === 'all' ? pool.length
+    : key === 'scrap' ? listings.filter((l) => scraps.has(l.id)).length
+    : pool.filter((l) => cornerOf(l) === key).length;
 
-  const tabs = [{ key: 'all', label: '전체', icon: '📋', desc: '서울에서 지금 열려 있는 모든 공고입니다.' }, ...CORNERS];
+  const tabs = [
+    { key: 'all', label: '전체', icon: '📋', desc: '서울에서 지금 열려 있는 모든 공고입니다.' },
+    { key: 'scrap', label: '스크랩', icon: '⭐', desc: '별표를 눌러 담아 둔 공고입니다. 이 브라우저에 저장됩니다.' },
+    ...CORNERS,
+  ];
   for (const c of tabs) {
     const n = count(c.key);
     const b = el('button', `corner-tab${filters.corner === c.key ? ' on' : ''}${n === 0 ? ' empty' : ''}`,
@@ -344,6 +367,8 @@ function visible() {
   return listings
     .map((l) => ({ l, a: analyze(l) }))
     .filter(({ l, a }) => {
+      // 스크랩 탭에서는 담아 둔 것을 상태와 무관하게 전부 보여준다
+      if (filters.corner === 'scrap') return scraps.has(l.id);
       if (filters.status.length && !filters.status.includes(a.status.key)) return false;
       if (filters.corner !== 'all' && cornerOf(l) !== filters.corner) return false;
       if (filters.gu.length && !(l.gu && filters.gu.includes(l.gu))) return false;
@@ -395,7 +420,10 @@ function cardOf(l, a) {
         <h3>${esc(l.name)}</h3>
         <div class="where">${esc(l.gu || l.areaName || '서울')} · ${esc(l.subType || l.kindLabel)}${l.totalUnits ? ` · 총 ${num(l.totalUnits)}세대` : ''}</div>
       </div>
-      <div class="match ${tier}"><b>${a.score}</b><span>맞춤도</span></div>
+      <div class="right">
+        <div class="match ${tier}"><b>${a.score}</b><span>맞춤도</span></div>
+        <button class="star${scraps.has(l.id) ? ' on' : ''}" title="스크랩" data-scrap="${esc(l.id)}">★</button>
+      </div>
     </div>
     <div class="badges">
       <span class="badge ${st.key === 'live' ? 'live' : (st.key === 'soon' || st.key === 'notice') ? 'soon' : 'done'}">${esc(st.label)}${dText ? ` · ${dText}` : ''}</span>
@@ -414,7 +442,11 @@ function cardOf(l, a) {
       <div><span>${st.key === 'done' ? '당첨발표' : '주요 일정'}</span><b>${fmtDate(st.until)}</b></div>
     </div>
     <div class="reasons">${a.reasons.slice(0, 3).map((r) => `<span class="reason${r.neg ? ' neg' : ''}">${esc(r.t)}</span>`).join('')}</div>`;
-  c.onclick = () => openDrawer(l.id);
+  c.onclick = (e) => {
+    const id = e.target.closest('[data-scrap]')?.dataset.scrap;
+    if (id) { e.stopPropagation(); toggleScrap(id); return; }
+    openDrawer(l.id);
+  };
   return c;
 }
 
@@ -492,7 +524,9 @@ function drawerHTML(l, a) {
 
   return `
   <button class="close-x" data-close>✕</button>
-  <h2>${esc(l.name)}</h2>
+  <h2>${esc(l.name)}
+    <button class="star${scraps.has(l.id) ? ' on' : ''}" title="스크랩" data-scrap="${esc(l.id)}">★</button>
+  </h2>
   <p class="lead small">${esc(l.address || '')}</p>
   <div class="badges" style="margin-top:10px">
     <span class="badge ${a.status.key === 'live' ? 'live' : (a.status.key === 'soon' || a.status.key === 'notice') ? 'soon' : 'done'}">${esc(a.status.label)}</span>
