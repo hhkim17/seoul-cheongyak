@@ -119,23 +119,19 @@ const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const eok = (m) => (m == null ? null : `${(m / 10000).toFixed(m / 10000 >= 10 ? 1 : 2)}억`);
 const cornerLabel = (k) => (curr.corners || []).find((c) => c.key === k)?.label || k;
 
-const byCorner = {};
-for (const l of hits) (byCorner[l.corner] ||= []).push(l);
-
 const card = (l) => {
   const rental = RENTAL.has(l.kind);
   const priceOf = (m) => (rental ? (m.depositManwon ?? m.priceManwon) : m.priceManwon);
   const prices = (l.models || []).map(priceOf).filter((v) => v != null);
   const areas = (l.models || []).map((m) => m.exclusiveArea).filter((a) => a != null);
-  const line = [
-    l.gu, l.kindLabel,
-    l.totalUnits ? `${l.totalUnits.toLocaleString('ko-KR')}세대` : null,
-  ].filter(Boolean).join(' · ');
+  const line = [l.gu, l.kindLabel, l.totalUnits ? `${l.totalUnits.toLocaleString('ko-KR')}세대` : null].filter(Boolean).join(' · ');
   const money = prices.length
     ? `${rental ? '보증금' : '분양가'} ${eok(Math.min(...prices))}${Math.max(...prices) !== Math.min(...prices) ? ` ~ ${eok(Math.max(...prices))}` : ''}`
     : '금액은 공고문 참조';
   const area = areas.length ? `전용 ${Math.min(...areas)}~${Math.max(...areas)}㎡` : '';
-  const when = l.receiptStart ? `접수 ${l.receiptStart}${l.receiptEnd && l.receiptEnd !== l.receiptStart ? ` ~ ${l.receiptEnd}` : ''}` : '일정은 공고 원문 확인';
+  const when = l.receiptStart
+    ? `접수 ${l.receiptStart}${l.receiptEnd && l.receiptEnd !== l.receiptStart ? ` ~ ${l.receiptEnd}` : ''}`
+    : '일정은 공고 원문 확인';
 
   return `<tr><td style="padding:14px 16px;border:1px solid #e3e6ec;border-radius:10px;background:#fff">
     <div style="font-size:15px;font-weight:700;color:#14171c">${esc(l.name)}</div>
@@ -146,23 +142,41 @@ const card = (l) => {
   </td></tr><tr><td style="height:10px"></td></tr>`;
 };
 
-const html = `<div style="font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;background:#f5f6f8;padding:24px">
+function buildHtml(hits) {
+  const byCorner = {};
+  for (const l of hits) (byCorner[l.corner] ||= []).push(l);
+  return `<div style="font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;background:#f5f6f8;padding:24px">
   <div style="max-width:640px;margin:0 auto">
     <h1 style="font-size:19px;color:#14171c;margin:0 0 4px">${TEST ? '[테스트] ' : ''}내 조건에 맞는 새 청약 공고 ${hits.length}건</h1>
     <p style="font-size:13px;color:#7b8494;margin:0 0 20px">${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })} 기준</p>
     ${Object.entries(byCorner).map(([k, list]) => `
-      <h2 style="font-size:13px;color:#7b8494;margin:22px 0 10px;text-transform:none">${esc(cornerLabel(k))} · ${list.length}건</h2>
+      <h2 style="font-size:13px;color:#7b8494;margin:22px 0 10px">${esc(cornerLabel(k))} · ${list.length}건</h2>
       <table style="width:100%;border-collapse:separate;border-spacing:0">${list.map(card).join('')}</table>`).join('')}
     <p style="margin-top:26px"><a href="${SITE}" style="display:inline-block;background:#2f6fe4;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px">대시보드에서 전체 보기</a></p>
     <p style="font-size:11px;color:#9aa2b0;margin-top:20px;line-height:1.7">
-      알림 조건은 저장소의 <code>watch.json</code>에서 바꿀 수 있습니다.<br>
+      알림을 끄려면 대시보드에서 로그인 후 「메일 알림」의 수신 설정을 꺼 주세요.<br>
       일정·자격·금액은 반드시 공고 원문을 확인하세요. 이 메일은 공개 데이터를 모아 자동 발송된 것입니다.
     </p>
   </div>
 </div>`;
+}
+
+// ── 사람마다 조건이 다르므로 각자에게 맞는 메일을 만든다 ─────────────
+const outbox = [];
+for (const person of people) {
+  let hits = fresh.filter(makeMatcher(person.watch));
+  if (!hits.length && TEST) hits = fresh.slice(0, 3);
+  console.log(`  ${person.label} ${person.email}: ${hits.length}건`);
+  if (!hits.length) continue;
+  outbox.push({
+    to: person.email,
+    subject: `${TEST ? '[테스트] ' : ''}[서울청약] 내 조건 새 공고 ${hits.length}건 — ${hits.slice(0, 2).map((l) => l.name).join(', ')}${hits.length > 2 ? ' 외' : ''}`,
+    html: buildHtml(hits),
+  });
+}
+
+if (!outbox.length) { console.log('보낼 메일이 없습니다.'); process.exit(0); }
 
 fs.mkdirSync(OUT, { recursive: true });
-fs.writeFileSync(path.join(OUT, 'email.html'), html);
-fs.writeFileSync(path.join(OUT, 'subject.txt'),
-  `${TEST ? '[테스트] ' : ''}[서울청약] 내 조건 새 공고 ${hits.length}건 — ${hits.slice(0, 2).map((l) => l.name).join(', ')}${hits.length > 2 ? ' 외' : ''}`);
-console.log('메일 본문을 만들었습니다: notify/email.html');
+fs.writeFileSync(path.join(OUT, 'outbox.json'), JSON.stringify(outbox, null, 2));
+console.log(`보낼 메일 ${outbox.length}통을 준비했습니다.`);
