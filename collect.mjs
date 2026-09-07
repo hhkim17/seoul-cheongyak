@@ -221,22 +221,41 @@ export async function enrich(key, listing, { withCmpet }) {
   }
 
   if (isLh(kind)) {
-    // LH: 공급정보(주택형·세대수·임대조건) + 상세(첨부 공고문 PDF)
+    const args = {
+      panId: listing.panId, uppCd: listing.uppCd, aisTpCd: listing.aisTpCd,
+      splInfTpCd: listing.splInfTpCd, ccrCd: listing.ccrCd,
+    };
+    // 공급정보: 주택형·전용면적·세대수·임대조건
     try {
-      const rows = await LH.lhSupply(key, {
-        panId: listing.panId, uppCd: listing.uppCd, aisTpCd: listing.aisTpCd,
-        splInfTpCd: listing.splInfTpCd, ccrCd: listing.ccrCd,
-      });
-      out.models = rows.map(N.normalizeLhModel).filter((m) => m.houseType);
+      const json = await LH.lhSupplyRaw(key, args);
+      out.models = LH.pickArray(json, LH.isSupplyRow).map(N.normalizeLhModel);
     } catch (e) { out.modelError = e.message; }
+
+    // 상세: 청약 일정과 첨부 공고문. 목록에는 일정이 없어 여기서 채운다.
     try {
-      const { rows, raw } = await LH.lhDetail(key, {
-        panId: listing.panId, uppCd: listing.uppCd, aisTpCd: listing.aisTpCd,
-        splInfTpCd: listing.splInfTpCd, ccrCd: listing.ccrCd,
-      });
-      out.attachments = N.extractAttachments(raw);
-      out.lhDetail = rows.slice(0, 20);
+      const json = await LH.lhDetailRaw(key, args);
+      const sched = LH.pickArray(json, LH.isScheduleRow);
+      if (sched.length) {
+        const s = N.lhScheduleOf(sched);
+        Object.assign(out, {
+          receiptStart: s.receiptStart, receiptEnd: s.receiptEnd,
+          rank1Start: s.receiptStart, rank1End: s.receiptEnd,
+          resultDate: s.resultDate,
+          contractStart: s.contractStart, contractEnd: s.contractEnd,
+          docStart: s.docStart, docEnd: s.docEnd,
+          acceptNote: s.acceptNote,
+          scheduleUnknown: !s.receiptStart,
+        });
+      }
+      out.attachments = N.lhFilesOf(LH.pickArray(json, LH.isFileRow));
+      const complex = LH.pickArray(json, LH.isComplexRow)[0];
+      if (complex) {
+        out.address = [complex.LGDN_ADR, complex.LGDN_DTL_ADR].filter(Boolean).join(' ').trim();
+        out.gu = N.guFromAddress(out.address) || listing.gu;
+        out.moveIn = String(complex.MVIN_XPC_YM ?? '');
+      }
     } catch { /* 상세가 없는 공고도 있다 */ }
+
     cacheSet(cacheKey, out);
     return out;
   }

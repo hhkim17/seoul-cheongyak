@@ -132,20 +132,18 @@ export const isScheduleRow = (r) => r && ('SBSC_ACP_ST_DT' in r) && /\d/.test(St
 /** 단지 행 */
 export const isComplexRow = (r) => r && ('LGDN_ADR' in r) && String(r.LGDN_ADR ?? '').length > 3;
 
-/** 공고별 공급정보(주택형·세대수·임대조건) */
-export async function lhSupply(serviceKey, { panId, uppCd, aisTpCd, splInfTpCd, ccrCd }) {
-  const json = await call('lhLeaseNoticeSplInfo1/getLeaseNoticeSplInfo1', serviceKey, {
+/** 공고별 공급정보(주택형·세대수·임대조건) — 원본 JSON */
+export function lhSupplyRaw(serviceKey, { panId, uppCd, aisTpCd, splInfTpCd, ccrCd }) {
+  return call('lhLeaseNoticeSplInfo1/getLeaseNoticeSplInfo1', serviceKey, {
     SPL_INF_TP_CD: splInfTpCd, CCR_CNNT_SYS_DS_CD: ccrCd,
     PAN_ID: panId, UPP_AIS_TP_CD: uppCd, ...(aisTpCd ? { AIS_TP_CD: aisTpCd } : {}),
   });
-  return extractRows(json);
 }
 
-/** 공고별 상세정보(첨부파일·문의처 등) */
-export async function lhDetail(serviceKey, { panId, uppCd, aisTpCd, splInfTpCd, ccrCd }) {
-  const json = await call('lhLeaseNoticeDtlInfo1/getLeaseNoticeDtlInfo1', serviceKey, {
+/** 공고별 상세정보(일정·첨부파일·단지) — 원본 JSON */
+export function lhDetailRaw(serviceKey, { panId, uppCd, aisTpCd, splInfTpCd, ccrCd }) {
+  return call('lhLeaseNoticeDtlInfo1/getLeaseNoticeDtlInfo1', serviceKey, {
     SPL_INF_TP_CD: splInfTpCd, CCR_CNNT_SYS_DS_CD: ccrCd,
     PAN_ID: panId, UPP_AIS_TP_CD: uppCd, ...(aisTpCd ? { AIS_TP_CD: aisTpCd } : {}),
   });
-  return { rows: extractRows(json), raw: json };
 }
