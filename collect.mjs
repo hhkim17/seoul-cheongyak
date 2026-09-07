@@ -47,9 +47,9 @@ async function section(label, fn, normalize, retry) {
 }
 
 /** LH는 청약홈과 응답 구조가 완전히 달라 따로 다룬다 */
-async function lhSection(key, from, to) {
+async function lhSection(key) {
   try {
-    const rows = await LH.lhNotices(key, { from, to });
+    const rows = await LH.lhNotices(key, { months: 14 });
     const out = rows.map(N.normalizeLh);
     log(`  LH: ${out.length}건`);
     return { rows: out, error: null, blocked: false };
@@ -118,8 +118,6 @@ async function scrapeSection() {
 export async function collectListings(key) {
   const since = daysAgoISO(LOOKBACK_DAYS);
   const sinceCompact = since.replace(/-/g, '');
-  const lhFrom = since.replace(/-/g, '.');
-  const lhTo = new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10).replace(/-/g, '.');
   log(`공고 수집 시작 (모집공고일 ${since} 이후)`);
 
   const [apt, remndr, urbty, rent, lh, mh, scraped] = await Promise.all([
@@ -127,7 +125,7 @@ export async function collectListings(key) {
     section('무순위/잔여세대', () => api.remndrList(key, since), N.normalizeRemndr, () => api.remndrList(key, sinceCompact)),
     section('오피스텔·도시형·생숙', () => api.urbtyList(key, since), N.normalizeUrbty, () => api.urbtyList(key, sinceCompact)),
     section('공공지원 민간임대', () => api.pblPvtRentList(key, sinceCompact), N.normalizeRent, () => api.pblPvtRentList(key, since)),
-    lhSection(key, lhFrom, lhTo),
+    lhSection(key),
     myhomeSection(key),
     scrapeSection(),
   ]);
@@ -225,11 +223,17 @@ export async function enrich(key, listing, { withCmpet }) {
   if (isLh(kind)) {
     // LH: 공급정보(주택형·세대수·임대조건) + 상세(첨부 공고문 PDF)
     try {
-      const rows = await LH.lhSupply(key, { panId: listing.panId, uppCd: listing.uppCd, aisTpCd: listing.aisTpCd });
+      const rows = await LH.lhSupply(key, {
+        panId: listing.panId, uppCd: listing.uppCd, aisTpCd: listing.aisTpCd,
+        splInfTpCd: listing.splInfTpCd, ccrCd: listing.ccrCd,
+      });
       out.models = rows.map(N.normalizeLhModel).filter((m) => m.houseType);
     } catch (e) { out.modelError = e.message; }
     try {
-      const { rows, raw } = await LH.lhDetail(key, { panId: listing.panId, uppCd: listing.uppCd, aisTpCd: listing.aisTpCd });
+      const { rows, raw } = await LH.lhDetail(key, {
+        panId: listing.panId, uppCd: listing.uppCd, aisTpCd: listing.aisTpCd,
+        splInfTpCd: listing.splInfTpCd, ccrCd: listing.ccrCd,
+      });
       out.attachments = N.extractAttachments(raw);
       out.lhDetail = rows.slice(0, 20);
     } catch { /* 상세가 없는 공고도 있다 */ }

@@ -67,26 +67,46 @@ async function call(path, serviceKey, params) {
   return json;
 }
 
-/** 공고 목록. uppCd 미지정이면 분양·임대·주거복지·신혼희망타운을 모두 훑는다. */
-export async function lhNotices(serviceKey, { from, to, cnpCd = SEOUL_CNP_CD, uppCodes = Object.keys(LH_UPP), perPage = 100, maxPages = 5 } = {}) {
+const fmt = (d) => `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+
+/**
+ * 서버가 조회 기간을 약 2개월로 잘라 버린다(넓게 줘도 최근 2개월만 돌려준다).
+ * 그래서 2개월짜리 창을 뒤로 밀어 가며 여러 번 조회한다.
+ */
+function windows(months, spanDays = 60) {
   const out = [];
-  for (const upp of uppCodes) {
-    for (let page = 1; page <= maxPages; page++) {
-      const json = await call('lhLeaseNoticeInfo1/lhLeaseNoticeInfo1', serviceKey, {
-        PG_SZ: String(perPage), PAGE: String(page),
-        UPP_AIS_TP_CD: upp, CNP_CD: cnpCd,
-        PAN_NT_ST_DT: from, CLSG_DT: to,
-      });
-      const rows = extractRows(json).filter((r) => r.PAN_ID || r.PAN_NM);
-      out.push(...rows.map((r) => ({ ...r, UPP_AIS_TP_CD: r.UPP_AIS_TP_CD || upp })));
-      if (rows.length < perPage) break;
-    }
+  const now = Date.now();
+  for (let i = 0; i * spanDays < months * 30.5; i++) {
+    const to = new Date(now - i * spanDays * 86400000);
+    const from = new Date(to.getTime() - spanDays * 86400000);
+    out.push({ from: fmt(from), to: fmt(to) });
   }
   return out;
 }
 
+/** 공고 목록. uppCd 미지정이면 분양·임대·주거복지·신혼희망타운을 모두 훑는다. */
+export async function lhNotices(serviceKey, { months = 14, cnpCd = SEOUL_CNP_CD, uppCodes = Object.keys(LH_UPP), perPage = 100, maxPages = 3 } = {}) {
+  const out = [];
+  for (const upp of uppCodes) {
+    for (const w of windows(months)) {
+      for (let page = 1; page <= maxPages; page++) {
+        const json = await call('lhLeaseNoticeInfo1/lhLeaseNoticeInfo1', serviceKey, {
+          PG_SZ: String(perPage), PAGE: String(page),
+          UPP_AIS_TP_CD: upp, CNP_CD: cnpCd,
+          PAN_NT_ST_DT: w.from, CLSG_DT: w.to,
+        });
+        const rows = extractRows(json).filter((r) => r.PAN_ID || r.PAN_NM);
+        out.push(...rows.map((r) => ({ ...r, UPP_AIS_TP_CD: r.UPP_AIS_TP_CD || upp })));
+        if (rows.length < perPage) break;
+      }
+    }
+  }
+  const seen = new Set();
+  return out.filter((r) => { const k = `${r.PAN_ID}|${r.AIS_TP_CD}`; return seen.has(k) ? false : seen.add(k); });
+}
+
 /** 공고별 공급정보(주택형·세대수·임대조건) */
-export async function lhSupply(serviceKey, { panId, uppCd, aisTpCd, splInfTpCd = '050', ccrCd = '01' }) {
+export async function lhSupply(serviceKey, { panId, uppCd, aisTpCd, splInfTpCd, ccrCd }) {
   const json = await call('lhLeaseNoticeSplInfo1/getLeaseNoticeSplInfo1', serviceKey, {
     SPL_INF_TP_CD: splInfTpCd, CCR_CNNT_SYS_DS_CD: ccrCd,
     PAN_ID: panId, UPP_AIS_TP_CD: uppCd, ...(aisTpCd ? { AIS_TP_CD: aisTpCd } : {}),
@@ -95,7 +115,7 @@ export async function lhSupply(serviceKey, { panId, uppCd, aisTpCd, splInfTpCd =
 }
 
 /** 공고별 상세정보(첨부파일·문의처 등) */
-export async function lhDetail(serviceKey, { panId, uppCd, aisTpCd, splInfTpCd = '010', ccrCd = '01' }) {
+export async function lhDetail(serviceKey, { panId, uppCd, aisTpCd, splInfTpCd, ccrCd }) {
   const json = await call('lhLeaseNoticeDtlInfo1/getLeaseNoticeDtlInfo1', serviceKey, {
     SPL_INF_TP_CD: splInfTpCd, CCR_CNNT_SYS_DS_CD: ccrCd,
     PAN_ID: panId, UPP_AIS_TP_CD: uppCd, ...(aisTpCd ? { AIS_TP_CD: aisTpCd } : {}),

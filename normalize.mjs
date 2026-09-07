@@ -246,6 +246,9 @@ export function normalizeLh(r) {
     panId: pick(r, 'PAN_ID'),
     uppCd: upp,
     aisTpCd: pick(r, 'AIS_TP_CD'),
+    // 상세·공급정보 조회에 그대로 넘겨야 하는 코드들
+    splInfTpCd: pick(r, 'SPL_INF_TP_CD'),
+    ccrCd: pick(r, 'CCR_CNNT_SYS_DS_CD'),
     name,
     areaName: pick(r, 'CNP_CD_NM') || '서울',
     address: addr,
