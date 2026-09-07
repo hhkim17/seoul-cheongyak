@@ -8,7 +8,10 @@ export const SEOUL_GU = [
 
 const s = (v) => (v == null ? '' : String(v).trim());
 const n = (v) => {
-  const x = Number(String(v ?? '').replace(/[^0-9.\-]/g, ''));
+  // '공고문 참조'처럼 숫자가 없는 값은 0이 아니라 '없음'이다
+  const t = String(v ?? '').replace(/[^0-9.\-]/g, '');
+  if (!/\d/.test(t)) return null;
+  const x = Number(t);
   return Number.isFinite(x) ? x : null;
 };
 
