@@ -45,8 +45,8 @@ const DEFAULT_CORNERS = [
   { key: 'remnant', label: '무순위·잔여세대', icon: '🎯', kinds: ['REMNDR'], desc: '미계약·부적격 물량 재공급. 가점 없이 추첨이라 통장이 약해도 노려볼 수 있습니다.' },
   { key: 'officetel', label: '오피스텔·도시형', icon: '🏬', kinds: ['URBTY'], desc: '오피스텔·도시형생활주택·생활형숙박시설. 청약통장 없이 추첨으로 뽑습니다.' },
   { key: 'publicrent', label: '공공지원 민간임대', icon: '🤝', kinds: ['RENT'], desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
-  { key: 'lhsale', label: 'LH 분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE'], desc: 'LH 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
-  { key: 'lhrent', label: 'LH 임대주택', icon: '🏠', kinds: ['LH_RENT'], desc: '행복주택·국민임대·영구임대·매입임대·전세임대. 소득·자산 기준으로 뽑습니다.' },
+  { key: 'lhsale', label: '공공분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE', 'MYHOME_SALE'], desc: 'LH·SH·지방공사가 공급하는 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
+  { key: 'lhrent', label: '공공임대주택', icon: '🏠', kinds: ['LH_RENT', 'MYHOME_RENT'], desc: '행복주택·국민임대·영구임대·통합공공임대·매입/전세임대. 소득·자산 기준으로 뽑고, 부모님이 60세 이상이어도 유주택으로 봅니다.' },
   { key: 'welfare', label: '주거복지', icon: '💚', kinds: ['LH_WELFARE'], desc: '주거취약계층·고령자 등 대상 주거지원 공고.' },
 ];
 let CORNERS = DEFAULT_CORNERS;
