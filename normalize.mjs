@@ -420,12 +420,13 @@ export function normalizeSh(r) {
     gu: guFromAddress(r.title),
     totalUnits: null,
     noticeDate: toISO(r.date),
-    // 게시판 목록에는 접수기간이 없다 — 지어내지 않고 '일정 미상'으로 둔다
-    receiptStart: null, receiptEnd: null, rank1Start: null, rank1End: null,
+    // 상세 본문에서 접수기간을 찾았으면 쓰고, 못 찾았으면 지어내지 않고 비워 둔다
+    receiptStart: r.receiptStart || null, receiptEnd: r.receiptEnd || null,
+    rank1Start: r.receiptStart || null, rank1End: r.receiptEnd || null,
     resultDate: null, contractStart: null, contractEnd: null, moveIn: '',
     developer: 'SH 서울주택도시공사', builder: '', tel: '1600-3456',
     homepage: 'https://www.i-sh.co.kr/', noticeUrl: r.url,
-    subType: r.dept, scheduleUnknown: true,
+    subType: r.dept, scheduleUnknown: !r.receiptStart,
     noticeKind: r.noticeKind || classifyNotice(r.title),   // 모집 / 발표 / 안내
     attachments: [], models: [], cmpet: null, score: null, flags: {},
   };
