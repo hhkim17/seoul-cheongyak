@@ -263,3 +263,45 @@ export function normalizeLh(r) {
     flags: {},
   };
 }
+
+/** LH 공급정보 → 주택형 모델. 필드명이 확정적이지 않아 후보를 넓게 본다. */
+export function normalizeLhModel(m) {
+  const ty = pick(m, 'HSH_NM', 'HTY_NM', 'LND_US_DS_CD_NM', 'BLK_NM') || '주택형';
+  const ar = n(pick(m, 'AR', 'EXCLUSE_AR', 'SPL_AR', 'DDO_AR'));
+  const units = n(pick(m, 'SPL_HSH_CNT', 'SPL_CNT', 'HSH_CNT', 'LNO'));
+  const price = n(pick(m, 'SPL_XPC_AMT', 'SPL_AMT'));        // 원 단위로 오는 경우가 많다
+  const deposit = n(pick(m, 'LS_GMY', 'RRTA_GMY', 'GMY'));   // 임대보증금
+  const monthly = n(pick(m, 'MTH_RT_GMY', 'MT_RT_GMY'));     // 월임대료
+  const toManwon = (v) => (v == null ? null : v >= 1000000 ? Math.round(v / 10000) : v);
+
+  return {
+    modelNo: pick(m, 'LNO', 'SPL_INF_TP_CD') || ty,
+    houseType: ty,
+    exclusiveArea: ar,
+    supplyArea: null,
+    generalUnits: units ?? 0,
+    specialUnits: 0,
+    special: {},
+    priceManwon: toManwon(price),
+    depositManwon: toManwon(deposit),
+    monthlyManwon: toManwon(monthly),
+  };
+}
+
+/** LH 상세 응답 어디에 있든 첨부파일(파일명 + URL) 쌍을 긁어낸다 */
+export function extractAttachments(node, out = []) {
+  if (Array.isArray(node)) { node.forEach((x) => extractAttachments(x, out)); return out; }
+  if (!node || typeof node !== 'object') return out;
+
+  const entries = Object.entries(node);
+  const nameKey = entries.find(([k]) => /ATC?H.*(FILE|NM)|FILE.*(NM|NAME)|ATFL/i.test(k));
+  const urlKey = entries.find(([k, v]) => typeof v === 'string' && /^https?:\/\//.test(v) && /FILE|ATCH|ATFL|URL/i.test(k));
+  if (urlKey) {
+    out.push({ name: (nameKey?.[1] && String(nameKey[1])) || decodeURIComponent(String(urlKey[1]).split('/').pop() || '첨부파일'), url: String(urlKey[1]) });
+  }
+  entries.forEach(([, v]) => extractAttachments(v, out));
+
+  // 같은 URL 중복 제거
+  const seen = new Set();
+  return out.filter((a) => (seen.has(a.url) ? false : seen.add(a.url)));
+}
