@@ -47,12 +47,14 @@ const DEFAULT_CORNERS = [
   { key: 'publicrent', label: '공공지원 민간임대', icon: '🤝', kinds: ['RENT'], desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
   { key: 'lhsale', label: '공공분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE', 'MYHOME_SALE'], desc: 'LH·SH·지방공사가 공급하는 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
   { key: 'lhrent', label: '공공임대주택', icon: '🏠', kinds: ['LH_RENT', 'MYHOME_RENT'], desc: '행복주택·국민임대·영구임대·통합공공임대·매입/전세임대. 소득·자산 기준으로 뽑고, 부모님이 60세 이상이어도 유주택으로 봅니다.' },
+  { key: 'sh', label: 'SH 서울주택도시공사', icon: '🏙️', kinds: ['SH'], desc: '장기전세·청년안심주택·행복주택·매입임대·미리내집 등. SH는 공고 API가 없어 공고 게시판을 직접 읽어옵니다 — 일정·조건은 공고 원문을 확인하세요.' },
+  { key: 'hug', label: 'HUG 든든전세', icon: '🛡️', kinds: ['HUG'], desc: 'HUG가 전세보증금을 대신 갚고 매입한 주택을 공공임대로 공급합니다. 소득·자산 기준이 없고 무주택세대구성원이면 신청할 수 있습니다.' },
   { key: 'welfare', label: '주거복지', icon: '💚', kinds: ['LH_WELFARE'], desc: '주거취약계층·고령자 등 대상 주거지원 공고.' },
 ];
 let CORNERS = DEFAULT_CORNERS;
 
 // 임대 공고는 분양가가 아니라 보증금·월세로 읽어야 한다
-const RENTAL_KINDS = ['RENT', 'LH_RENT', 'LH_WELFARE'];
+const RENTAL_KINDS = ['RENT', 'LH_RENT', 'LH_WELFARE', 'MYHOME_RENT', 'SH', 'HUG'];
 const isRental = (l) => RENTAL_KINDS.includes(l.kind);
 const cornerOf = (l) => l.corner || CORNERS.find((c) => c.kinds.includes(l.kind))?.key || 'apt';
 
@@ -60,6 +62,7 @@ const STATUSES = [
   { key: 'live', label: '접수중' },
   { key: 'soon', label: '접수예정' },
   { key: 'result', label: '발표대기' },
+  { key: 'notice', label: '공고 확인' },
   { key: 'done', label: '종료' },
 ];
 
@@ -137,6 +140,8 @@ function statusOf(l) {
   const next = w.find((x) => x.from > TODAY);
   if (next) return { key: 'soon', label: `${next.label} 예정`, until: next.from, d: dayDiff(next.from) };
   if (l.resultDate && l.resultDate >= TODAY) return { key: 'result', label: '당첨자 발표 대기', until: l.resultDate, d: dayDiff(l.resultDate) };
+  // 게시판에서 긁어온 공고는 접수 일정이 목록에 없다. 마감으로 단정하지 않는다.
+  if (!w.length && l.scheduleUnknown) return { key: 'notice', label: '공고 게시 — 일정은 원문 확인', until: l.noticeDate, d: null };
   return { key: 'done', label: '접수 마감', until: w.at(-1)?.to || l.receiptEnd, d: null };
 }
 
@@ -149,7 +154,7 @@ const DEFAULT_PROFILE = {
 let profile = { ...DEFAULT_PROFILE, ...JSON.parse(localStorage.getItem('cheongyak.profile') || '{}') };
 const saveProfile = () => localStorage.setItem('cheongyak.profile', JSON.stringify(profile));
 
-let filters = { status: ['live', 'soon', 'result'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
+let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
 let listings = [];
 let meta = {};
 
@@ -222,6 +227,7 @@ function analyze(l) {
   if (st.key === 'live') { score += 10; }
   else if (st.key === 'soon') { score += st.d <= 7 ? 9 : st.d <= 30 ? 7 : 4; }
   else if (st.key === 'result') { score += 2; }
+  else if (st.key === 'notice') { score += 6; }
 
   const prices = priced.map(priceOf);
   const areas = models.map((m) => m.exclusiveArea).filter((a) => a != null);
@@ -392,7 +398,7 @@ function cardOf(l, a) {
       <div class="match ${tier}"><b>${a.score}</b><span>맞춤도</span></div>
     </div>
     <div class="badges">
-      <span class="badge ${st.key === 'live' ? 'live' : st.key === 'soon' ? 'soon' : 'done'}">${esc(st.label)}${dText ? ` · ${dText}` : ''}</span>
+      <span class="badge ${st.key === 'live' ? 'live' : (st.key === 'soon' || st.key === 'notice') ? 'soon' : 'done'}">${esc(st.label)}${dText ? ` · ${dText}` : ''}</span>
       <span class="badge tag">${esc(l.kindLabel)}</span>
       ${l.flags?.priceCap ? '<span class="badge">분양가상한제</span>' : ''}
       ${l.flags?.speculative ? '<span class="badge hot">투기과열</span>' : ''}
@@ -488,7 +494,7 @@ function drawerHTML(l, a) {
   <h2>${esc(l.name)}</h2>
   <p class="lead small">${esc(l.address || '')}</p>
   <div class="badges" style="margin-top:10px">
-    <span class="badge ${a.status.key === 'live' ? 'live' : a.status.key === 'soon' ? 'soon' : 'done'}">${esc(a.status.label)}</span>
+    <span class="badge ${a.status.key === 'live' ? 'live' : (a.status.key === 'soon' || a.status.key === 'notice') ? 'soon' : 'done'}">${esc(a.status.label)}</span>
     <span class="badge tag">${esc(l.kindLabel)}${l.subType ? ' · ' + esc(l.subType) : ''}</span>
     ${l.totalUnits ? `<span class="badge">총 ${num(l.totalUnits)}세대</span>` : ''}
     ${l.flags?.priceCap ? '<span class="badge">분양가상한제</span>' : ''}
@@ -688,7 +694,7 @@ $('#fSort').onchange = (e) => { filters.sort = e.target.value; renderCards(); };
 $('#fBudget').onchange = (e) => { filters.budgetOnly = e.target.checked; renderCards(); };
 $('#fEligible').onchange = (e) => { filters.eligibleOnly = e.target.checked; renderCards(); };
 $('#fReset').onclick = () => {
-  filters = { status: ['live', 'soon', 'result'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
+  filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
   renderAll();
 };
 
