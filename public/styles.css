@@ -217,3 +217,18 @@ details.help li { margin-bottom: 4px; }
 details.help b { color: var(--text); }
 details.help p { margin: 6px 0 0; font-size: 12px; color: var(--text-3); }
 .score-out .sub { display: block; margin-top: 4px; font-size: 12px; color: var(--text-3); }
+
+/* ── 데이터 연결 상태 ───────────────────────────── */
+.sources { margin-bottom: 14px; font-size: 13px; }
+.sources > summary { cursor: pointer; color: var(--text-2); padding: 6px 0; }
+.source-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.source {
+  display: grid; grid-template-columns: 20px 1fr auto; gap: 10px; align-items: start;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; padding: 10px 13px;
+}
+.source .dot { font-size: 12px; line-height: 1.6; }
+.source .nm { font-size: 13px; font-weight: 600; }
+.source .use { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+.source .org { font-size: 11px; color: var(--text-3); }
+.source a { font-size: 12px; white-space: nowrap; }
+.source.off { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }

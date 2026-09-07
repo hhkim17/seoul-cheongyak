@@ -619,6 +619,8 @@ async function load(refresh = false) {
   const auto = STATIC ? ' · 30분마다 자동 재빌드' : (data.autoRefreshMinutes ? ` · ${data.autoRefreshMinutes}분마다 자동 갱신` : '');
   $('#status').textContent = `서울 공고 ${listings.length}건 · ${t.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })} 기준${auto}`;
 
+  renderSources(data.sources);
+
   const banner = $('#banner');
   const notes = [...(data.errors || [])];
   if (data.enriching) notes.push(`상세 정보(분양가·경쟁률) 수집 중 ${data.progress.done}/${data.progress.total} — 잠시 후 자동 갱신됩니다.`);
@@ -638,6 +640,28 @@ function schedulePoll(ms) {
 }
 // 탭으로 돌아오면 즉시 한 번 맞춘다
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
+
+function renderSources(sources) {
+  const box = $('#sources');
+  if (!Array.isArray(sources) || !sources.length) { box.hidden = true; return; }
+  box.hidden = false;
+  const off = sources.filter((s) => !s.ok).length;
+  box.querySelector('summary').textContent = off
+    ? `데이터 연결 상태 — ${sources.length}개 중 ${off}개 미연결 (활용신청 필요)`
+    : `데이터 연결 상태 — ${sources.length}개 모두 연결됨`;
+  if (off) box.open = true;
+
+  $('#sourceList').innerHTML = sources.map((s) => `
+    <div class="source${s.ok ? '' : ' off'}">
+      <span class="dot">${s.ok ? '🟢' : '🟡'}</span>
+      <div>
+        <div class="nm">${esc(s.name)}</div>
+        <div class="use">${esc(s.use)}</div>
+        <div class="org">${esc(s.org)}${s.required ? ' · 필수' : ''}</div>
+      </div>
+      <a href="${esc(s.url)}" target="_blank" rel="noopener">${s.ok ? '문서 ↗' : '활용신청 ↗'}</a>
+    </div>`).join('');
+}
 
 function renderAll() { renderMeCard(); renderCorners(); renderFilters(); renderCards(); }
 
