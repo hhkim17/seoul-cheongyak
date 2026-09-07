@@ -42,6 +42,7 @@
     <div class="topbar-actions">
       <button id="btnProfile" class="ghost">내 조건 설정</button>
       <button id="btnRefresh" class="ghost" title="청약홈에서 다시 가져오기">새로고침</button>
+      <a id="repoLink" class="ghost btnlike" href="https://github.com/hhkim17/seoul-cheongyak" target="_blank" rel="noopener">소스</a>
     </div>
   </header>
 
@@ -52,10 +53,6 @@
       <div class="filter-group">
         <h3>진행 상태</h3>
         <div id="fStatus" class="chips"></div>
-      </div>
-      <div class="filter-group">
-        <h3>공급 유형</h3>
-        <div id="fKind" class="chips"></div>
       </div>
       <div class="filter-group">
         <h3>자치구</h3>
@@ -81,6 +78,8 @@
     </aside>
 
     <section class="content">
+      <nav id="corners" class="corners"></nav>
+      <p id="cornerDesc" class="corner-desc"></p>
       <div id="banner" class="banner" hidden></div>
       <div id="summary" class="summary"></div>
       <div id="cards" class="cards"></div>
