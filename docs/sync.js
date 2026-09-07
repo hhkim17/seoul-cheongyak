@@ -70,11 +70,21 @@ export async function signInWithKakao() {
   if (providers && !providers.includes('kakao')) {
     throw new Error('카카오 로그인이 아직 켜져 있지 않습니다. 아래 이메일 로그인을 쓰거나 Supabase에서 카카오 제공자를 켜 주세요.');
   }
+  // Supabase는 기본으로 카카오 이메일 동의(account_email)를 함께 요청하는데,
+  // 이메일 제공은 카카오 비즈앱 심사를 통과해야 열린다. 미신청 상태에서 요청하면
+  // KOE205가 난다. 그래서 닉네임만 받는다 — 알림용 이메일은 앱에서 따로 입력받는다.
   const { error } = await client.auth.signInWithOAuth({
     provider: 'kakao',
-    options: { redirectTo: location.href.split('#')[0] },
+    options: { redirectTo: location.href.split('#')[0], scopes: 'profile_nickname' },
   });
   if (error) throw new Error(error.message);
+}
+
+/** 카카오 로그인은 이메일을 주지 않는다 — 표시용 이름을 만들어 준다 */
+export function displayName() {
+  if (!currentUser) return '';
+  const m = currentUser.user_metadata || {};
+  return m.name || m.nickname || m.preferred_username || currentUser.email || '내 계정';
 }
 
 export async function signOut() { await client?.auth.signOut(); }
@@ -84,7 +94,7 @@ export async function pull() {
   if (!client || !currentUser) return null;
   const { data, error } = await client
     .from('profiles')
-    .select('profile, scraps, watch, notify_email, updated_at')
+    .select('profile, scraps, watch, notify_email, email, updated_at')
     .eq('id', currentUser.id)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -92,11 +102,11 @@ export async function pull() {
 }
 
 /** 내 설정을 서버에 저장한다 */
-export async function push({ profile, scraps, watch, notifyEmail }) {
+export async function push({ profile, scraps, watch, notifyEmail, email }) {
   if (!client || !currentUser) return;
   const { error } = await client.from('profiles').upsert({
     id: currentUser.id,
-    email: currentUser.email,
+    email: currentUser.email || email || null,
     profile, scraps, watch,
     notify_email: !!notifyEmail,
     updated_at: new Date().toISOString(),

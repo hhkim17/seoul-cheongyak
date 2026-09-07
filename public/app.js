@@ -648,8 +648,12 @@ function openMail() {
   $('#mAreaMin').value = watchCfg['전용면적_최소'];
   $('#mAreaMax').value = watchCfg['전용면적_최대'];
   $('#mUnpriced').checked = watchCfg['가격정보없어도_알림'] !== false;
+  const u = Sync.user();
   $('#mSubscribe').checked = notifyEmail;
-  $('#mSubscribe').disabled = !Sync.user();
+  $('#mSubscribe').disabled = !u;
+  // 계정에 이메일이 없으면(카카오) 받을 주소를 직접 받는다
+  $('#mEmailRow').hidden = !u || !!u.email;
+  $('#mEmail').value = alertEmail || '';
   renderMailChips();
   $('#mailMsg').textContent = '';
   $('#mailMsg').className = 'msg';
@@ -681,6 +685,13 @@ async function saveMail() {
   localStorage.setItem('cheongyak.watch', JSON.stringify(watchCfg));
   notifyEmail = $('#mSubscribe').checked;
   localStorage.setItem('cheongyak.notifyEmail', notifyEmail ? '1' : '0');
+  alertEmail = $('#mEmail').value.trim();
+  localStorage.setItem('cheongyak.alertEmail', alertEmail);
+  if (notifyEmail && !Sync.user()?.email && !alertEmail) {
+    const m = $('#mailMsg'); m.className = 'msg err';
+    m.textContent = '알림을 받으려면 이메일 주소를 입력해 주세요.';
+    return;
+  }
   schedulePush();
   const msg = $('#mailMsg');
 
@@ -789,13 +800,15 @@ function showApp() { $('#setup').hidden = true; $('#app').hidden = false; }
 
 // ── 로그인 · 기기 간 동기화 ──────────────────────────────────────────
 let notifyEmail = localStorage.getItem('cheongyak.notifyEmail') === '1';
+// 카카오 로그인은 이메일을 주지 않으므로 알림용 주소를 따로 받는다
+let alertEmail = localStorage.getItem('cheongyak.alertEmail') || '';
 let syncTimer = null;
 
 function renderAuth(u) {
-  $('#btnAuth').textContent = u ? (u.email?.split('@')[0] || '내 계정') : '로그인';
+  $('#btnAuth').textContent = u ? Sync.displayName().split('@')[0] : '로그인';
   $('#authedBox').hidden = !u;
   $('#anonBox').hidden = !!u;
-  if (u) $('#authEmail').textContent = u.email || '(이메일 없음)';
+  if (u) $('#authEmail').textContent = Sync.displayName() + (u.email ? '' : ' (카카오 · 이메일 없음)');
 }
 
 /** 로컬 변경을 서버에 반영 — 잦은 저장을 모아서 한 번에 보낸다 */
@@ -804,7 +817,7 @@ function schedulePush() {
   clearTimeout(syncTimer);
   syncTimer = setTimeout(async () => {
     try {
-      await Sync.push({ profile, scraps: [...scraps], watch: watchCfg, notifyEmail });
+      await Sync.push({ profile, scraps: [...scraps], watch: watchCfg, notifyEmail, email: alertEmail });
     } catch (e) { console.warn('동기화 실패:', e.message); }
   }, 1200);
 }
@@ -824,6 +837,7 @@ async function pullAndApply() {
   }
   notifyEmail = !!row.notify_email;
   localStorage.setItem('cheongyak.notifyEmail', notifyEmail ? '1' : '0');
+  if (row.email) { alertEmail = row.email; localStorage.setItem('cheongyak.alertEmail', alertEmail); }
   renderAll();
   return `불러왔습니다 — 스크랩 ${scraps.size}건.`;
 }
