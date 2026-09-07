@@ -400,6 +400,7 @@ function cardOf(l, a) {
     <div class="badges">
       <span class="badge ${st.key === 'live' ? 'live' : (st.key === 'soon' || st.key === 'notice') ? 'soon' : 'done'}">${esc(st.label)}${dText ? ` · ${dText}` : ''}</span>
       <span class="badge tag">${esc(l.kindLabel)}</span>
+      ${l.noticeKind && l.noticeKind !== '모집' ? `<span class="badge">${esc(l.noticeKind)}</span>` : ''}
       ${l.flags?.priceCap ? '<span class="badge">분양가상한제</span>' : ''}
       ${l.flags?.speculative ? '<span class="badge hot">투기과열</span>' : ''}
       ${a.cmpetAvg != null ? `<span class="badge ${a.cmpetAvg >= 20 ? 'hot' : ''}">경쟁률 ${a.cmpetAvg}:1</span>` : ''}

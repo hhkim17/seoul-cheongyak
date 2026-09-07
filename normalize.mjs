@@ -373,6 +373,7 @@ export function normalizeSh(r) {
     developer: 'SH 서울주택도시공사', builder: '', tel: '1600-3456',
     homepage: 'https://www.i-sh.co.kr/', noticeUrl: r.url,
     subType: r.dept, scheduleUnknown: true,
+    noticeKind: r.noticeKind,   // 모집 / 발표 / 안내
     attachments: [], models: [], cmpet: null, score: null, flags: {},
   };
 }

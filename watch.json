@@ -1,11 +1,23 @@
 {
   "_설명": "이메일 알림 조건입니다. 이 파일을 고쳐서 커밋하면 다음 갱신부터 반영됩니다.",
-  "코너": ["apt", "remnant", "publicrent", "lhrent", "lhsale", "sh", "hug"],
+  "코너": [
+    "apt",
+    "remnant",
+    "publicrent",
+    "lhrent",
+    "lhsale",
+    "sh",
+    "hug"
+  ],
   "관심자치구": [],
   "최대분양가_억": 12,
   "최대보증금_억": 5,
   "전용면적_최소": 0,
   "전용면적_최대": 200,
-  "해당특별공급": ["newlywed", "firstLife"],
-  "가격정보없어도_알림": true
+  "해당특별공급": [
+    "newlywed",
+    "firstLife"
+  ],
+  "가격정보없어도_알림": true,
+  "모집공고만": true
 }

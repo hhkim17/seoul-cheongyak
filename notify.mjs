@@ -37,8 +37,12 @@ const areaMax = watch['전용면적_최대'] ?? 9999;
 const specials = watch['해당특별공급'] || [];
 const allowUnpriced = watch['가격정보없어도_알림'] !== false;
 
+const recruitOnly = watch['모집공고만'] !== false;
+
 function matches(l) {
   if (corners.length && !corners.includes(l.corner)) return false;
+  // 게시판 공고는 '당첨자 발표'·'안내'가 섞인다 — 알림은 모집공고만
+  if (recruitOnly && l.noticeKind && l.noticeKind !== '모집') return false;
   if (gus.length && !(l.gu && gus.includes(l.gu))) return false;
 
   const models = l.models || [];

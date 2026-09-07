@@ -30,6 +30,13 @@ const SH_TYPES = ['장기전세주택', '청년안심주택', '행복주택', '�
   '국민임대', '공공임대', '미리내집', '신혼', '공공분양'];
 const shType = (t) => SH_TYPES.find((k) => t.includes(k)) || 'SH 공고';
 
+/** 같은 게시판에 모집공고와 발표·안내가 섞여 있다. 알림은 '모집'만 보내야 한다. */
+function shNoticeKind(t) {
+  if (/(당첨자|서류심사|예비자|합격자|추가\s*모집\s*대상)/.test(t)) return '발표';
+  if (/(입주자\s*모집|모집\s*공고|공급\s*공고|청약\s*접수)/.test(t)) return '모집';
+  return '안내';
+}
+
 export async function scrapeSh({ pages = 2 } = {}) {
   const out = [];
   for (let page = 1; page <= pages; page++) {
@@ -42,7 +49,8 @@ export async function scrapeSh({ pages = 2 } = {}) {
       if (c.length < 4) continue;
       const title = c[1].replace(/^NEW\s*/, '');
       if (!SH_KEEP.test(title) || SH_DROP.test(title)) continue;
-      out.push({ seq, no: c[0], title, dept: c[2], date: c[3], url: SH_VIEW + seq, type: shType(title) });
+      out.push({ seq, no: c[0], title, dept: c[2], date: c[3], url: SH_VIEW + seq,
+        type: shType(title), noticeKind: shNoticeKind(title) });
     }
     await new Promise((r) => setTimeout(r, 700)); // 서버 배려
   }
