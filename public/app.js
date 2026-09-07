@@ -61,6 +61,52 @@ const STATUSES = [
   { key: 'done', label: '종료' },
 ];
 
+// ── 날짜에서 기간 뽑기 ───────────────────────────────────────────────
+const yearsBetween = (from, to = new Date()) => {
+  if (!from) return null;
+  const a = new Date(from);
+  if (Number.isNaN(+a)) return null;
+  const months = (to.getFullYear() - a.getFullYear()) * 12 + (to.getMonth() - a.getMonth()) - (to.getDate() < a.getDate() ? 1 : 0);
+  return Math.max(0, months / 12);
+};
+
+/**
+ * 무주택 기간 기산일 — 주택공급규칙 기준.
+ *  · 기본은 신청자가 만 30세가 되는 날
+ *  · 30세 전에 혼인했다면 혼인신고일
+ *  · 본인·배우자가 집을 소유한 적이 있으면 무주택이 된 날부터 다시
+ * 만 60세 이상 직계존속의 주택은 없는 것으로 보므로 여기에 영향을 주지 않는다
+ * (단 노부모부양 특별공급과 공공임대는 예외 — 화면 도움말에 적어 뒀다).
+ */
+export function noHouseStart(p) {
+  if (!p.birthYm) return null;
+  const b = new Date(`${p.birthYm}-01`);
+  if (Number.isNaN(+b)) return null;
+  let start = new Date(b.getFullYear() + 30, b.getMonth(), 1);
+  if (p.marriageDate) {
+    const m = new Date(p.marriageDate);
+    if (!Number.isNaN(+m) && m < start) start = m;
+  }
+  if (p.noHouseSince) {
+    const h = new Date(p.noHouseSince);
+    if (!Number.isNaN(+h) && h > start) start = h;
+  }
+  return start;
+}
+
+/** 아직 만 30세가 안 됐으면 무주택 기간은 0 */
+export function noHouseYearsOf(p) {
+  const start = noHouseStart(p);
+  if (!start) return p.noHouseYears ?? 0;          // 예전 형식(년수 직접 입력) 호환
+  if (start > new Date()) return 0;
+  return yearsBetween(start) ?? 0;
+}
+
+export function accountYearsOf(p) {
+  if (!p.accountYm) return p.accountYears ?? 0;    // 예전 형식 호환
+  return yearsBetween(`${p.accountYm}-01`) ?? 0;
+}
+
 // ── 청약 가점 계산 (주택공급규칙 별표1) ───────────────────────────────
 function noHouseScore(y) { if (!y || y < 1) return 2; return Math.min(32, 2 + Math.floor(y) * 2); }
 function accountScore(y) {
@@ -69,7 +115,7 @@ function accountScore(y) {
   return Math.min(17, 3 + (Math.floor(y) - 1));
 }
 function familyScore(n) { return Math.min(35, 5 + (Number(n) || 0) * 5); }
-function totalScore(p) { return noHouseScore(p.noHouseYears) + accountScore(p.accountYears) + familyScore(p.family); }
+function totalScore(p) { return noHouseScore(noHouseYearsOf(p)) + accountScore(accountYearsOf(p)) + familyScore(p.family); }
 
 // ── 상태 판정 ────────────────────────────────────────────────────────
 function windows(l) {
@@ -94,7 +140,7 @@ function statusOf(l) {
 
 // ── 프로필 ───────────────────────────────────────────────────────────
 const DEFAULT_PROFILE = {
-  noHouseYears: 0, accountYears: 0, family: 0,
+  birthYm: '', marriageDate: '', noHouseSince: '', accountYm: '', family: 0,
   budgetEok: 9, areaMin: 49, areaMax: 99,
   special: [], gu: [], seoulResident: true,
 };
@@ -237,11 +283,13 @@ function cutlineFor(l) {
 // ── 렌더링 ───────────────────────────────────────────────────────────
 function renderMeCard() {
   const s = totalScore(profile);
+  const nh = noHouseYearsOf(profile), ac = accountYearsOf(profile);
+  const yr = (v) => `${Math.floor(v)}년${Math.round((v % 1) * 12) ? ` ${Math.round((v % 1) * 12)}개월` : ''}`;
   $('#meCard').innerHTML = `
     <div class="big">${s}<span style="font-size:13px;color:var(--text-3)"> / 84점</span></div>
-    <div class="sub">내 청약 가점</div>
-    <div class="row"><span>무주택 ${profile.noHouseYears}년</span><b>${noHouseScore(profile.noHouseYears)}점</b></div>
-    <div class="row"><span>통장 ${profile.accountYears}년</span><b>${accountScore(profile.accountYears)}점</b></div>
+    <div class="sub">내 청약 가점${profile.birthYm ? '' : ' · 조건 미입력'}</div>
+    <div class="row"><span>무주택 ${yr(nh)}</span><b>${noHouseScore(nh)}점</b></div>
+    <div class="row"><span>통장 ${yr(ac)}</span><b>${accountScore(ac)}점</b></div>
     <div class="row"><span>부양가족 ${profile.family}명</span><b>${familyScore(profile.family)}점</b></div>
     <div class="row" style="margin-top:8px;border-top:1px solid var(--line-soft);padding-top:8px">
       <span>예산</span><b>${profile.budgetEok}억</b></div>
@@ -498,8 +546,10 @@ function drawerHTML(l, a) {
 
 // ── 프로필 모달 ──────────────────────────────────────────────────────
 function openProfile() {
-  $('#pNoHouse').value = profile.noHouseYears;
-  $('#pAccount').value = profile.accountYears;
+  $('#pBirth').value = profile.birthYm || '';
+  $('#pMarriage').value = profile.marriageDate || '';
+  $('#pNoHouseSince').value = profile.noHouseSince || '';
+  $('#pAccountYm').value = profile.accountYm || '';
   $('#pFamily').value = profile.family;
   $('#pBudget').value = profile.budgetEok;
   $('#pAreaMin').value = profile.areaMin;
@@ -516,13 +566,29 @@ function renderProfileChips() {
   chipRow($('#pGu'), SEOUL_GU.map((g) => ({ key: g, label: g })), profile.gu, (k) => { toggle(profile.gu, k); renderProfileChips(); });
 }
 
-function updateScoreOut() {
-  const p = {
-    noHouseYears: +$('#pNoHouse').value || 0,
-    accountYears: +$('#pAccount').value || 0,
+function formFromModal() {
+  return {
+    birthYm: $('#pBirth').value,
+    marriageDate: $('#pMarriage').value,
+    noHouseSince: $('#pNoHouseSince').value,
+    accountYm: $('#pAccountYm').value,
     family: +$('#pFamily').value || 0,
   };
-  $('#scoreOut').innerHTML = `총 <b>${totalScore(p)}점</b> &nbsp;·&nbsp; 무주택 ${noHouseScore(p.noHouseYears)} + 통장 ${accountScore(p.accountYears)} + 부양가족 ${familyScore(p.family)}`;
+}
+
+function updateScoreOut() {
+  const p = formFromModal();
+  const nh = noHouseYearsOf(p), ac = accountYearsOf(p);
+  const start = noHouseStart(p);
+  const yr = (v) => `${Math.floor(v)}년 ${Math.round((v % 1) * 12)}개월`;
+  const note = !p.birthYm
+    ? '생년월을 넣으면 무주택 기간이 자동으로 계산됩니다.'
+    : start > new Date()
+      ? `만 30세(${start.getFullYear()}.${String(start.getMonth() + 1).padStart(2, '0')})가 되면 무주택 기간이 쌓이기 시작합니다.`
+      : `무주택 기산일 ${start.toISOString().slice(0, 10)} · ${yr(nh)}${p.accountYm ? ` / 통장 ${yr(ac)}` : ''}`;
+  $('#scoreOut').innerHTML =
+    `총 <b>${totalScore(p)}점</b> &nbsp;·&nbsp; 무주택 ${noHouseScore(nh)} + 통장 ${accountScore(ac)} + 부양가족 ${familyScore(p.family)}
+     <span class="sub">${esc(note)}</span>`;
 }
 
 // ── 데이터 로드 ──────────────────────────────────────────────────────
@@ -600,14 +666,14 @@ $('#fReset').onclick = () => {
   renderAll();
 };
 
-for (const id of ['pNoHouse', 'pAccount', 'pFamily']) $('#' + id).addEventListener('input', updateScoreOut);
+for (const id of ['pBirth', 'pMarriage', 'pNoHouseSince', 'pAccountYm', 'pFamily']) {
+  $('#' + id).addEventListener('input', updateScoreOut);
+}
 
 $('#pSave').onclick = () => {
   profile = {
     ...profile,
-    noHouseYears: +$('#pNoHouse').value || 0,
-    accountYears: +$('#pAccount').value || 0,
-    family: +$('#pFamily').value || 0,
+    ...formFromModal(),
     budgetEok: +$('#pBudget').value || 0,
     areaMin: +$('#pAreaMin').value || 0,
     areaMax: +$('#pAreaMax').value || 999,
