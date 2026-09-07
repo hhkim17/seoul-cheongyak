@@ -2,6 +2,7 @@
 
 import { api } from './api.mjs';
 import * as LH from './lh.mjs';
+import { myhome } from './myhome.mjs';
 import * as N from './normalize.mjs';
 import { cacheGet, cacheSet } from './store.mjs';
 
@@ -64,6 +65,32 @@ async function lhSection(key, from, to) {
   }
 }
 
+/** 마이홈포털 통합 공고 — SH·지방공사 물량이 여기로 들어온다 */
+async function myhomeSection(key) {
+  const grab = async (label, fn, kindHint) => {
+    const rows = (await fn()).filter(N.myhomeIsSeoul).map((r) => N.normalizeMyhome(r, kindHint));
+    log(`  마이홈 ${label}: 서울 ${rows.length}건`);
+    return rows;
+  };
+  try {
+    const [rent, sale] = await Promise.all([
+      grab('공공임대', () => myhome.rentNotices(key), 'MYHOME_RENT'),
+      grab('공공분양', () => myhome.saleNotices(key), 'MYHOME_SALE'),
+    ]);
+    return { rows: [...rent, ...sale], error: null, blocked: false };
+  } catch (e) {
+    const blocked = e.code === 'NOT_REGISTERED';
+    log(`  마이홈: ${blocked ? '활용신청 필요' : `실패 — ${e.message}`}`);
+    return {
+      rows: [],
+      blocked,
+      error: blocked
+        ? 'SH·지방공사 공고(공공임대·공공분양)는 아직 안 나옵니다 — 공공데이터포털에서 “국토교통부_마이홈포털 공공주택 모집공고 조회 서비스” 활용신청이 필요합니다.'
+        : `마이홈포털 조회 실패: ${e.message}`,
+    };
+  }
+}
+
 export async function collectListings(key) {
   const since = daysAgoISO(LOOKBACK_DAYS);
   const sinceCompact = since.replace(/-/g, '');
@@ -71,16 +98,18 @@ export async function collectListings(key) {
   const lhTo = new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10).replace(/-/g, '.');
   log(`공고 수집 시작 (모집공고일 ${since} 이후)`);
 
-  const [apt, remndr, urbty, rent, lh] = await Promise.all([
+  const [apt, remndr, urbty, rent, lh, mh] = await Promise.all([
     section('아파트', () => api.aptList(key, since), N.normalizeApt, () => api.aptList(key, sinceCompact)),
     section('무순위/잔여세대', () => api.remndrList(key, since), N.normalizeRemndr, () => api.remndrList(key, sinceCompact)),
     section('오피스텔·도시형·생숙', () => api.urbtyList(key, since), N.normalizeUrbty, () => api.urbtyList(key, sinceCompact)),
     section('공공지원 민간임대', () => api.pblPvtRentList(key, sinceCompact), N.normalizeRent, () => api.pblPvtRentList(key, since)),
     lhSection(key, lhFrom, lhTo),
+    myhomeSection(key),
   ]);
 
-  const all = [apt, remndr, urbty, rent, lh].flatMap((r) => r.rows);
-  const errors = [apt, remndr, urbty, rent, lh].map((r) => r.error).filter(Boolean);
+  const parts = [apt, remndr, urbty, rent, lh, mh];
+  const all = parts.flatMap((r) => r.rows);
+  const errors = parts.map((r) => r.error).filter(Boolean);
 
   const seen = new Map();
   for (const l of all) if (!seen.has(l.id)) seen.set(l.id, l);
@@ -89,7 +118,7 @@ export async function collectListings(key) {
     .sort((a, b) => (b.noticeDate || '').localeCompare(a.noticeDate || ''));
 
   log(`수집 완료: 서울 ${listings.length}건`);
-  return { listings, errors, lhBlocked: lh.blocked, fetchedAt: Date.now() };
+  return { listings, errors, lhBlocked: lh.blocked, myhomeBlocked: mh.blocked, fetchedAt: Date.now() };
 }
 
 // ── 단지별 상세 보강 ────────────────────────────────────────────────
@@ -108,6 +137,7 @@ const CMPET_FETCHERS = {
 };
 
 const isLh = (kind) => kind.startsWith('LH_');
+const isMyhome = (kind) => kind.startsWith('MYHOME_');
 
 export const state = { cmpetBlocked: false };
 
@@ -118,6 +148,9 @@ export async function enrich(key, listing, { withCmpet }) {
   if (hit) return hit.value;
 
   const out = { models: [], cmpet: null, score: null, spsply: null, attachments: [] };
+
+  // 마이홈 통합 공고는 목록 자체가 전부다. 상세는 공고 원문 링크로 넘긴다.
+  if (isMyhome(kind)) { cacheSet(cacheKey, out); return out; }
 
   if (isLh(kind)) {
     // LH: 공급정보(주택형·세대수·임대조건) + 상세(첨부 공고문 PDF)
