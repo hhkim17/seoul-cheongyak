@@ -110,8 +110,11 @@ function analyze(l) {
   const budgetManwon = profile.budgetEok * 10000;
   const myScore = totalScore(profile);
   const models = l.models || [];
-  const priced = models.filter((m) => m.priceManwon);
-  const affordable = priced.filter((m) => m.priceManwon <= budgetManwon);
+  const rental = isRental(l);
+  // 임대는 분양가가 없다 — 보증금을 예산과 견준다
+  const priceOf = (m) => (rental ? (m.depositManwon ?? m.priceManwon) : m.priceManwon);
+  const priced = models.filter((m) => priceOf(m));
+  const affordable = priced.filter((m) => priceOf(m) <= budgetManwon);
   const inArea = models.filter((m) => m.exclusiveArea != null && m.exclusiveArea >= profile.areaMin && m.exclusiveArea <= profile.areaMax);
 
   const eligibleSpecial = SPECIAL_TYPES.filter((t) =>
@@ -122,12 +125,12 @@ function analyze(l) {
   let score = 0;
 
   // 예산 (35)
-  if (!priced.length) { score += 12; reasons.push({ t: '분양가 미공개', neg: false }); }
-  else if (!affordable.length) { reasons.push({ t: `예산 초과 (최저 ${eok(Math.min(...priced.map((m) => m.priceManwon)))})`, neg: true }); }
+  if (!priced.length) { score += 12; reasons.push({ t: rental ? '임대조건 공고문 확인' : '분양가 미공개' }); }
+  else if (!affordable.length) { reasons.push({ t: `예산 초과 (최저 ${eok(Math.min(...priced.map(priceOf)))})`, neg: true }); }
   else {
     const ratio = affordable.length / priced.length;
     score += 18 + Math.round(17 * ratio);
-    reasons.push({ t: `예산 내 ${affordable.length}/${priced.length}개 타입` });
+    reasons.push({ t: `${rental ? '보증금' : '예산'} 내 ${affordable.length}/${priced.length}개 타입` });
   }
 
   // 면적 (15)
@@ -142,6 +145,13 @@ function analyze(l) {
   if (eligibleSpecial.length) {
     score += 25;
     reasons.push({ t: `특별공급 해당 · ${eligibleSpecial.map((t) => t.label).join('·')}` });
+  } else if (rental) {
+    // 임대는 가점이 아니라 소득·자산 기준이라 앱이 당락을 판단할 수 없다
+    score += 18;
+    reasons.push({ t: '소득·자산 요건 — 공고문 확인 필요' });
+  } else if (l.kind === 'LH_SALE') {
+    score += 16;
+    reasons.push({ t: 'LH 공공분양 — 소득·자산 요건 있음' });
   } else if (l.kind === 'REMNDR') {
     score += 20;
     reasons.push({ t: '무순위 — 가점 무관 추첨' });
@@ -165,9 +175,10 @@ function analyze(l) {
   else if (st.key === 'soon') { score += st.d <= 7 ? 9 : st.d <= 30 ? 7 : 4; }
   else if (st.key === 'result') { score += 2; }
 
-  const prices = priced.map((m) => m.priceManwon);
+  const prices = priced.map(priceOf);
   const areas = models.map((m) => m.exclusiveArea).filter((a) => a != null);
-  const pp = priced.map(pyeongPrice).filter(Boolean);
+  const pp = rental ? [] : priced.map(pyeongPrice).filter(Boolean);
+  const monthlies = models.map((m) => m.monthlyManwon).filter((v) => v != null);
 
   return {
     status: st,
@@ -180,6 +191,9 @@ function analyze(l) {
     minArea: areas.length ? Math.min(...areas) : null,
     maxArea: areas.length ? Math.max(...areas) : null,
     pyeong: pp.length ? Math.round(pp.reduce((a, b) => a + b, 0) / pp.length) : null,
+    rental,
+    minMonthly: monthlies.length ? Math.min(...monthlies) : null,
+    maxMonthly: monthlies.length ? Math.max(...monthlies) : null,
     eligibleSpecial,
     myScore,
     cmpetAvg: cmpetAverage(l),
@@ -335,8 +349,10 @@ function cardOf(l, a) {
       ${a.cmpetAvg != null ? `<span class="badge ${a.cmpetAvg >= 20 ? 'hot' : ''}">경쟁률 ${a.cmpetAvg}:1</span>` : ''}
     </div>
     <div class="kv">
-      <div><span>분양가</span><b>${a.minPrice != null ? `${eok(a.minPrice)} ~ ${eok(a.maxPrice)}` : '미공개'}</b></div>
-      <div><span>평당가</span><b>${a.pyeong ? `${num(a.pyeong)}만원` : '—'}</b></div>
+      <div><span>${a.rental ? '보증금' : '분양가'}</span><b>${a.minPrice != null ? `${eok(a.minPrice)}${a.maxPrice !== a.minPrice ? ` ~ ${eok(a.maxPrice)}` : ''}` : '공고문 참조'}</b></div>
+      <div><span>${a.rental ? '월임대료' : '평당가'}</span><b>${a.rental
+        ? (a.minMonthly != null ? `${num(a.minMonthly)}만원${a.maxMonthly !== a.minMonthly ? ` ~ ${num(a.maxMonthly)}` : ''}` : '—')
+        : (a.pyeong ? `${num(a.pyeong)}만원` : '—')}</b></div>
       <div><span>전용면적</span><b>${a.minArea != null ? `${a.minArea} ~ ${a.maxArea}㎡` : '—'}</b></div>
       <div><span>${st.key === 'done' ? '당첨발표' : '주요 일정'}</span><b>${fmtDate(st.until)}</b></div>
     </div>
