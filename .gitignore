@@ -7,3 +7,5 @@ cache/
 
 .DS_Store
 node_modules/
+notify/
+.prev-listings.json
