@@ -1,0 +1,183 @@
+// 공고 수집 · 상세 보강 — 로컬 서버(server.mjs)와 정적 빌드(build.mjs)가 함께 쓴다.
+
+import { api } from './api.mjs';
+import * as LH from './lh.mjs';
+import * as N from './normalize.mjs';
+import { cacheGet, cacheSet } from './store.mjs';
+
+export const LIST_TTL = 10 * 60 * 1000;
+export const DETAIL_TTL = 6 * 60 * 60 * 1000;
+export const LOOKBACK_DAYS = Number(process.env.LOOKBACK_DAYS || 540);
+
+export const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+
+export function daysAgoISO(d) {
+  return new Date(Date.now() - d * 86400000).toISOString().slice(0, 10);
+}
+
+// 공급지역명이 있으면 그것만 믿는다. 공급위치 주소에는 지구 경계 설명으로
+// 타 시·도 공고에도 '서울특별시 OO구'가 섞여 들어오기 때문.
+const isSeoul = (row) => {
+  const area = String(row.SUBSCRPT_AREA_CODE_NM || '').trim();
+  if (area) return area.includes('서울');
+  return String(row.HSSPLY_ADRES || '').trim().startsWith('서울');
+};
+
+async function section(label, fn, normalize, retry) {
+  try {
+    const rows = await fn();
+    const out = rows.filter(isSeoul).map(normalize);
+    log(`  ${label}: 전국 ${rows.length}건 → 서울 ${out.length}건`);
+    return { rows: out, error: null };
+  } catch (e) {
+    if (retry) {
+      log(`  ${label}: 날짜 필터 실패, 전체 조회로 재시도 — ${e.message}`);
+      try {
+        const rows = await retry();
+        const out = rows.filter(isSeoul).map(normalize);
+        log(`  ${label}: 전국 ${rows.length}건 → 서울 ${out.length}건 (재시도)`);
+        return { rows: out, error: null };
+      } catch (e2) { e = e2; }
+    }
+    log(`  ${label}: 실패 — ${e.message}`);
+    return { rows: [], error: `${label} 조회 실패: ${e.message}` };
+  }
+}
+
+/** LH는 청약홈과 응답 구조가 완전히 달라 따로 다룬다 */
+async function lhSection(key, from, to) {
+  try {
+    const rows = await LH.lhNotices(key, { from, to });
+    const out = rows.map(N.normalizeLh);
+    log(`  LH: ${out.length}건`);
+    return { rows: out, error: null, blocked: false };
+  } catch (e) {
+    const blocked = e.code === 'NOT_REGISTERED';
+    log(`  LH: ${blocked ? '활용신청 필요' : `실패 — ${e.message}`}`);
+    return {
+      rows: [],
+      blocked,
+      error: blocked
+        ? 'LH 임대·분양(행복주택·국민임대 등)은 아직 안 나옵니다 — 공공데이터포털에서 “한국토지주택공사_분양임대공고문 조회 서비스” 활용신청이 필요합니다.'
+        : `LH 조회 실패: ${e.message}`,
+    };
+  }
+}
+
+export async function collectListings(key) {
+  const since = daysAgoISO(LOOKBACK_DAYS);
+  const sinceCompact = since.replace(/-/g, '');
+  const lhFrom = since.replace(/-/g, '.');
+  const lhTo = new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10).replace(/-/g, '.');
+  log(`공고 수집 시작 (모집공고일 ${since} 이후)`);
+
+  const [apt, remndr, urbty, rent, lh] = await Promise.all([
+    section('아파트', () => api.aptList(key, since), N.normalizeApt, () => api.aptList(key, sinceCompact)),
+    section('무순위/잔여세대', () => api.remndrList(key, since), N.normalizeRemndr, () => api.remndrList(key, sinceCompact)),
+    section('오피스텔·도시형·생숙', () => api.urbtyList(key, since), N.normalizeUrbty, () => api.urbtyList(key, sinceCompact)),
+    section('공공지원 민간임대', () => api.pblPvtRentList(key, sinceCompact), N.normalizeRent, () => api.pblPvtRentList(key, since)),
+    lhSection(key, lhFrom, lhTo),
+  ]);
+
+  const all = [apt, remndr, urbty, rent, lh].flatMap((r) => r.rows);
+  const errors = [apt, remndr, urbty, rent, lh].map((r) => r.error).filter(Boolean);
+
+  const seen = new Map();
+  for (const l of all) if (!seen.has(l.id)) seen.set(l.id, l);
+  const listings = [...seen.values()]
+    .map((l) => ({ ...l, corner: N.cornerOf(l.kind) }))
+    .sort((a, b) => (b.noticeDate || '').localeCompare(a.noticeDate || ''));
+
+  log(`수집 완료: 서울 ${listings.length}건`);
+  return { listings, errors, lhBlocked: lh.blocked, fetchedAt: Date.now() };
+}
+
+// ── 단지별 상세 보강 ────────────────────────────────────────────────
+const MODEL_FETCHERS = {
+  APT: { models: api.aptModels, norm: N.normalizeAptModel },
+  REMNDR: { models: api.remndrModels, norm: N.normalizeSimpleModel },
+  URBTY: { models: api.urbtyModels, norm: N.normalizeUrbtyModel },
+  RENT: { models: api.pblPvtRentModels, norm: N.normalizeSimpleModel },
+};
+
+const CMPET_FETCHERS = {
+  APT: api.aptCmpet,
+  REMNDR: api.remndrCmpet,
+  URBTY: api.urbtyCmpet,
+  RENT: api.pblPvtRentCmpet,
+};
+
+const isLh = (kind) => kind.startsWith('LH_');
+
+export const state = { cmpetBlocked: false };
+
+export async function enrich(key, listing, { withCmpet }) {
+  const { houseManageNo: h, pblancNo: p, kind } = listing;
+  const cacheKey = `enrich_${listing.id}`;
+  const hit = cacheGet(cacheKey, DETAIL_TTL);
+  if (hit) return hit.value;
+
+  const out = { models: [], cmpet: null, score: null, spsply: null, attachments: [] };
+
+  if (isLh(kind)) {
+    // LH: 공급정보(주택형·세대수·임대조건) + 상세(첨부 공고문 PDF)
+    try {
+      const rows = await LH.lhSupply(key, { panId: listing.panId, uppCd: listing.uppCd, aisTpCd: listing.aisTpCd });
+      out.models = rows.map(N.normalizeLhModel).filter((m) => m.houseType);
+    } catch (e) { out.modelError = e.message; }
+    try {
+      const { rows, raw } = await LH.lhDetail(key, { panId: listing.panId, uppCd: listing.uppCd, aisTpCd: listing.aisTpCd });
+      out.attachments = N.extractAttachments(raw);
+      out.lhDetail = rows.slice(0, 20);
+    } catch { /* 상세가 없는 공고도 있다 */ }
+    cacheSet(cacheKey, out);
+    return out;
+  }
+
+  const mf = MODEL_FETCHERS[kind];
+  if (mf) {
+    try { out.models = (await mf.models(key, h, p)).map(mf.norm); }
+    catch (e) { out.modelError = e.message; }
+  }
+
+  if (withCmpet) {
+    const cf = CMPET_FETCHERS[kind];
+    if (cf) {
+      try { out.cmpet = await cf(key, h, p); }
+      catch (e) { out.cmpetError = e.message; if (e.status === 401) state.cmpetBlocked = true; }
+    }
+    if (kind === 'APT') {
+      try { out.score = await api.aptScore(key, h, p); } catch { /* 가점 미공개 */ }
+      try { out.spsply = await api.aptSpsply(key, h, p); } catch { /* 특공 현황 미공개 */ }
+    }
+  }
+
+  cacheSet(cacheKey, out);
+  return out;
+}
+
+/** 동시 요청 수를 제한하며 순회 */
+export async function pool(items, limit, worker) {
+  const queue = [...items];
+  const runners = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    while (queue.length) {
+      const item = queue.shift();
+      try { await worker(item); } catch { /* 개별 실패는 무시 */ }
+    }
+  });
+  await Promise.all(runners);
+}
+
+/** 접수가 끝난 공고만 경쟁률이 존재한다 */
+export function isClosed(l, today = new Date().toISOString().slice(0, 10)) {
+  return !!(l.receiptEnd && l.receiptEnd < today) || !!(l.rank1End && l.rank1End < today);
+}
+
+export async function enrichMany(key, targets, onProgress) {
+  let done = 0;
+  await pool(targets, 4, async (l) => {
+    const e = await enrich(key, l, { withCmpet: isClosed(l) });
+    Object.assign(l, e);
+    onProgress?.(++done, targets.length);
+  });
+}
