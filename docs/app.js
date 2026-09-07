@@ -1,4 +1,5 @@
 // 서울 청약 대시보드 — 프론트엔드
+import * as Sync from './sync.js';
 
 const $ = (s) => document.querySelector(s);
 const el = (t, cls, html) => { const e = document.createElement(t); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -159,7 +160,7 @@ let scraps = new Set(JSON.parse(localStorage.getItem('cheongyak.scraps') || '[]'
 const saveScraps = () => localStorage.setItem('cheongyak.scraps', JSON.stringify([...scraps]));
 function toggleScrap(id) {
   scraps.has(id) ? scraps.delete(id) : scraps.add(id);
-  saveScraps(); renderAll();
+  saveScraps(); schedulePush(); renderAll();
 }
 
 // 메일 알림 조건 — 로컬 서버가 watch.json에 써 주고, 없으면 화면에서 복사
@@ -641,6 +642,8 @@ function openMail() {
   $('#mAreaMin').value = watchCfg['전용면적_최소'];
   $('#mAreaMax').value = watchCfg['전용면적_최대'];
   $('#mUnpriced').checked = watchCfg['가격정보없어도_알림'] !== false;
+  $('#mSubscribe').checked = notifyEmail;
+  $('#mSubscribe').disabled = !Sync.user();
   renderMailChips();
   $('#mailMsg').textContent = '';
   $('#mailMsg').className = 'msg';
@@ -670,6 +673,9 @@ function collectMail() {
 async function saveMail() {
   watchCfg = collectMail();
   localStorage.setItem('cheongyak.watch', JSON.stringify(watchCfg));
+  notifyEmail = $('#mSubscribe').checked;
+  localStorage.setItem('cheongyak.notifyEmail', notifyEmail ? '1' : '0');
+  schedulePush();
   const msg = $('#mailMsg');
 
   if (STATIC) {
@@ -689,7 +695,8 @@ async function saveMail() {
     const d = await res.json();
     if (!res.ok) throw new Error(d.error || '저장 실패');
     msg.className = 'msg ok';
-    msg.textContent = 'watch.json에 저장했습니다. 자동 동기화가 곧 GitHub에 올려 다음 갱신부터 반영됩니다.';
+    msg.textContent = 'watch.json에 저장했습니다. 자동 동기화가 곧 GitHub에 올려 다음 갱신부터 반영됩니다.'
+      + (Sync.user() ? ' 계정에도 저장했습니다.' : '');
   } catch (e) {
     msg.className = 'msg err';
     msg.textContent = `저장하지 못했습니다: ${e.message}`;
@@ -774,6 +781,54 @@ function renderAll() { renderMeCard(); renderCorners(); renderFilters(); renderC
 function showSetup() { $('#setup').hidden = false; $('#app').hidden = true; }
 function showApp() { $('#setup').hidden = true; $('#app').hidden = false; }
 
+// ── 로그인 · 기기 간 동기화 ──────────────────────────────────────────
+let notifyEmail = localStorage.getItem('cheongyak.notifyEmail') === '1';
+let syncTimer = null;
+
+function renderAuth(u) {
+  $('#btnAuth').textContent = u ? (u.email?.split('@')[0] || '내 계정') : '로그인';
+  $('#authedBox').hidden = !u;
+  $('#anonBox').hidden = !!u;
+  if (u) $('#authEmail').textContent = u.email || '(이메일 없음)';
+}
+
+/** 로컬 변경을 서버에 반영 — 잦은 저장을 모아서 한 번에 보낸다 */
+function schedulePush() {
+  if (!Sync.user()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(async () => {
+    try {
+      await Sync.push({ profile, scraps: [...scraps], watch: watchCfg, notifyEmail });
+    } catch (e) { console.warn('동기화 실패:', e.message); }
+  }, 1200);
+}
+
+/** 서버 설정을 받아 화면에 반영 */
+async function pullAndApply() {
+  const row = await Sync.pull();
+  if (!row) { schedulePush(); return '이 계정의 첫 동기화입니다 — 지금 설정을 올렸습니다.'; }
+  if (row.profile && Object.keys(row.profile).length) {
+    profile = { ...DEFAULT_PROFILE, ...row.profile };
+    saveProfile();
+  }
+  if (Array.isArray(row.scraps)) { scraps = new Set(row.scraps); saveScraps(); }
+  if (row.watch && Object.keys(row.watch).length) {
+    watchCfg = { ...DEFAULT_WATCH, ...row.watch };
+    localStorage.setItem('cheongyak.watch', JSON.stringify(watchCfg));
+  }
+  notifyEmail = !!row.notify_email;
+  localStorage.setItem('cheongyak.notifyEmail', notifyEmail ? '1' : '0');
+  renderAll();
+  return `불러왔습니다 — 스크랩 ${scraps.size}건.`;
+}
+
+function openAuth() {
+  renderAuth(Sync.user());
+  $('#authMsg').textContent = ''; $('#authMsg').className = 'msg';
+  $('#syncMsg').textContent = ''; $('#syncMsg').className = 'msg';
+  $('#authModal').hidden = false;
+}
+
 // ── 이벤트 ───────────────────────────────────────────────────────────
 $('#keySave').onclick = async () => {
   const msg = $('#keyMsg'); msg.className = 'msg'; msg.textContent = '확인 중…';
@@ -791,6 +846,37 @@ $('#keyInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#k
 $('#btnRefresh').onclick = () => load(true);   // 목록만 다시 받기 (빠름)
 $('#btnProfile').onclick = openProfile;
 $('#btnMail').onclick = openMail;
+$('#btnAuth').onclick = openAuth;
+
+$('#btnMagic').onclick = async () => {
+  const msg = $('#authMsg'); const email = $('#authEmailInput').value.trim();
+  if (!email) { msg.className = 'msg err'; msg.textContent = '이메일을 입력해 주세요.'; return; }
+  msg.className = 'msg'; msg.textContent = '보내는 중…';
+  try {
+    await Sync.signInWithEmail(email);
+    msg.className = 'msg ok';
+    msg.textContent = `${email} 로 로그인 링크를 보냈습니다. 메일함을 확인하세요.`;
+  } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+};
+
+$('#btnKakao').onclick = async () => {
+  const msg = $('#authMsg');
+  try { await Sync.signInWithKakao(); }
+  catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = /provider is not enabled/i.test(e.message)
+      ? '카카오 로그인이 아직 켜져 있지 않습니다. 아래 이메일 로그인을 쓰거나 설정을 마쳐 주세요.'
+      : e.message;
+  }
+};
+
+$('#btnSignOut').onclick = async () => { await Sync.signOut(); renderAuth(null); };
+
+$('#btnSyncNow').onclick = async () => {
+  const msg = $('#syncMsg'); msg.className = 'msg'; msg.textContent = '동기화 중…';
+  try { msg.className = 'msg ok'; msg.textContent = await pullAndApply(); }
+  catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+};
 $('#mSave').onclick = saveMail;
 $('#mailCopy').onclick = () => navigator.clipboard?.writeText($('#mailJson').textContent);
 $('#fSort').onchange = (e) => { filters.sort = e.target.value; renderCards(); };
@@ -815,6 +901,7 @@ $('#pSave').onclick = () => {
     seoulResident: $('#pSeoulResident').checked,
   };
   saveProfile();
+  schedulePush();
   $('#profileModal').hidden = true;
   renderAll();
 };
@@ -833,6 +920,11 @@ document.addEventListener('keydown', (e) => {
 
 // ── 시작 ─────────────────────────────────────────────────────────────
 (async () => {
+  Sync.initAuth(async (u) => {
+    renderAuth(u);
+    if (u) { try { await pullAndApply(); } catch (e) { console.warn(e.message); } }
+  });
+
   if (STATIC) {
     $('#btnRefresh').hidden = true;   // 정적 배포에는 서버가 없다
     showApp(); renderMeCard(); load(false);
