@@ -663,9 +663,9 @@ function renderSources(sources) {
       <div>
         <div class="nm">${esc(s.name)}</div>
         <div class="use">${esc(s.use)}</div>
-        <div class="org">${esc(s.org)}${s.required ? ' · 필수' : ''}</div>
+        <div class="org">${esc(s.org)}${s.required ? ' · 필수' : ''}${s.scraped ? ' · 게시판 직접 수집' : ''}</div>
       </div>
-      <a href="${esc(s.url)}" target="_blank" rel="noopener">${s.ok ? '문서 ↗' : '활용신청 ↗'}</a>
+      <a href="${esc(s.url)}" target="_blank" rel="noopener">${s.scraped ? '원본 ↗' : s.ok ? '문서 ↗' : '활용신청 ↗'}</a>
     </div>`).join('');
 }
 

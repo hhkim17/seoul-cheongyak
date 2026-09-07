@@ -105,10 +105,14 @@ async function scrapeSection() {
     }
   };
   const [sh, hug] = await Promise.all([
-    run('SH 공고게시판', () => scrapeSh({ pages: 2 }), N.normalizeSh),
+    run('SH 공고게시판', () => scrapeSh({ pages: 3 }), N.normalizeSh),
     run('HUG 든든전세', () => scrapeHug(), N.normalizeHug),
   ]);
-  return { rows: [...sh.rows, ...hug.rows], error: sh.error || hug.error };
+  return {
+    rows: [...sh.rows, ...hug.rows],
+    error: [sh.error, hug.error].filter(Boolean).join(' | ') || null,
+    ok: { sh: !sh.error, hug: !hug.error },
+  };
 }
 
 export async function collectListings(key) {
@@ -139,7 +143,7 @@ export async function collectListings(key) {
     .sort((a, b) => (b.noticeDate || '').localeCompare(a.noticeDate || ''));
 
   log(`수집 완료: 서울 ${listings.length}건`);
-  return { listings, errors, lhBlocked: lh.blocked, myhomeBlocked: mh.blocked, fetchedAt: Date.now() };
+  return { listings, errors, lhBlocked: lh.blocked, myhomeBlocked: mh.blocked, scrapeOk: scraped.ok, fetchedAt: Date.now() };
 }
 
 // ── 단지별 상세 보강 ────────────────────────────────────────────────
@@ -182,12 +186,20 @@ export const DATA_SOURCES = [
   { id: 'myhome', org: '국토교통부', name: '마이홈포털 공공주택 모집공고 조회 서비스',
     use: 'SH·지방공사를 포함한 공공임대·공공분양 통합 공고',
     url: 'https://www.data.go.kr/data/15108420/openapi.do' },
+  { id: 'sh-board', org: 'SH 서울주택도시공사', name: 'SH 공고 게시판 (직접 수집)', scraped: true,
+    use: '장기전세·청년안심주택·매입임대·미리내집 등 SH 공고. Open API가 없어 공개 게시판을 읽습니다.',
+    url: 'https://www.i-sh.co.kr/main/lay2/program/S1T1637C1639/www/brd/m_247/list.do' },
+  { id: 'hug-board', org: 'HUG 주택도시보증공사', name: 'HUG 든든전세 모집공고 (직접 수집)', scraped: true,
+    use: '든든전세주택 모집 물량. Open API가 없어 공개 페이지를 읽습니다.',
+    url: 'https://www.khug.or.kr/jeonse/web/s07/s070102.jsp' },
 ];
 
 /** 수집 결과로부터 각 API가 지금 붙어 있는지 판정한다 */
-export function sourceStatus({ lhBlocked, myhomeBlocked }) {
+export function sourceStatus({ lhBlocked, myhomeBlocked, scrapeOk = {} }) {
   return DATA_SOURCES.map((s) => {
     let ok = true;
+    if (s.id === 'sh-board') ok = scrapeOk.sh !== false;
+    if (s.id === 'hug-board') ok = scrapeOk.hug !== false;
     if (s.id === 'applyhome-cmpet') ok = !state.cmpetBlocked;
     if (s.id.startsWith('lh-')) ok = !lhBlocked;
     if (s.id === 'myhome') ok = !myhomeBlocked;
