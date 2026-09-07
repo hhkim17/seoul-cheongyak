@@ -932,16 +932,19 @@ $('#pSave').onclick = () => {
   renderAll();
 };
 
+/** 열려 있는 모달·상세 패널을 모두 닫는다. 모달을 새로 만들어도 여기 손댈 일이 없다. */
+function closeOverlays() {
+  for (const el of document.querySelectorAll('.modal, .drawer')) el.hidden = true;
+}
+
 document.addEventListener('click', (e) => {
   const scrapBtn = e.target.closest('#drawerPanel [data-scrap]');
   if (scrapBtn) { toggleScrap(scrapBtn.dataset.scrap); scrapBtn.classList.toggle('on'); return; }
-  if (e.target.matches('[data-close]')) {
-    $('#drawer').hidden = true;
-    $('#profileModal').hidden = true;
-  }
+  // 닫기 버튼 안의 아이콘을 눌러도 닫히도록 closest로 찾는다
+  if (e.target.closest('[data-close]')) closeOverlays();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { $('#drawer').hidden = true; $('#profileModal').hidden = true; }
+  if (e.key === 'Escape') closeOverlays();
 });
 
 // ── 시작 ─────────────────────────────────────────────────────────────
