@@ -3,6 +3,7 @@
 import { api } from './api.mjs';
 import * as LH from './lh.mjs';
 import { myhome } from './myhome.mjs';
+import { scrapeSh, scrapeHug } from './scrape.mjs';
 import * as N from './normalize.mjs';
 import { cacheGet, cacheSet } from './store.mjs';
 
@@ -91,6 +92,25 @@ async function myhomeSection(key) {
   }
 }
 
+/** SH·HUG는 Open API가 없어 공개 게시판을 읽는다. 실패해도 나머지는 그대로 돈다. */
+async function scrapeSection() {
+  const run = async (label, fn, norm) => {
+    try {
+      const rows = (await fn()).map(norm);
+      log(`  ${label}: ${rows.length}건`);
+      return { rows, error: null };
+    } catch (e) {
+      log(`  ${label}: 실패 — ${e.message}`);
+      return { rows: [], error: `${label} 수집 실패(게시판 구조가 바뀌었을 수 있습니다): ${e.message}` };
+    }
+  };
+  const [sh, hug] = await Promise.all([
+    run('SH 공고게시판', () => scrapeSh({ pages: 2 }), N.normalizeSh),
+    run('HUG 든든전세', () => scrapeHug(), N.normalizeHug),
+  ]);
+  return { rows: [...sh.rows, ...hug.rows], error: sh.error || hug.error };
+}
+
 export async function collectListings(key) {
   const since = daysAgoISO(LOOKBACK_DAYS);
   const sinceCompact = since.replace(/-/g, '');
@@ -98,16 +118,17 @@ export async function collectListings(key) {
   const lhTo = new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10).replace(/-/g, '.');
   log(`공고 수집 시작 (모집공고일 ${since} 이후)`);
 
-  const [apt, remndr, urbty, rent, lh, mh] = await Promise.all([
+  const [apt, remndr, urbty, rent, lh, mh, scraped] = await Promise.all([
     section('아파트', () => api.aptList(key, since), N.normalizeApt, () => api.aptList(key, sinceCompact)),
     section('무순위/잔여세대', () => api.remndrList(key, since), N.normalizeRemndr, () => api.remndrList(key, sinceCompact)),
     section('오피스텔·도시형·생숙', () => api.urbtyList(key, since), N.normalizeUrbty, () => api.urbtyList(key, sinceCompact)),
     section('공공지원 민간임대', () => api.pblPvtRentList(key, sinceCompact), N.normalizeRent, () => api.pblPvtRentList(key, since)),
     lhSection(key, lhFrom, lhTo),
     myhomeSection(key),
+    scrapeSection(),
   ]);
 
-  const parts = [apt, remndr, urbty, rent, lh, mh];
+  const parts = [apt, remndr, urbty, rent, lh, mh, scraped];
   const all = parts.flatMap((r) => r.rows);
   const errors = parts.map((r) => r.error).filter(Boolean);
 
@@ -183,7 +204,11 @@ export async function enrich(key, listing, { withCmpet }) {
   const out = { models: [], cmpet: null, score: null, spsply: null, attachments: [] };
 
   // 마이홈 통합 공고는 목록 자체가 전부다. 상세는 공고 원문 링크로 넘긴다.
-  if (isMyhome(kind)) { cacheSet(cacheKey, out); return out; }
+  // 마이홈·SH·HUG는 목록이 곧 전부다. 상세는 공고 원문 링크로 넘긴다.
+  if (isMyhome(kind) || kind === 'SH' || kind === 'HUG') {
+    if (listing.models?.length) out.models = listing.models;
+    cacheSet(cacheKey, out); return out;
+  }
 
   if (isLh(kind)) {
     // LH: 공급정보(주택형·세대수·임대조건) + 상세(첨부 공고문 PDF)

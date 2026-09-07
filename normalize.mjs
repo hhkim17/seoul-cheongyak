@@ -209,6 +209,10 @@ export const CORNERS = [
     desc: 'LH·SH·지방공사가 공급하는 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
   { key: 'lhrent',     label: '공공임대주택',       icon: '🏠', kinds: ['LH_RENT', 'MYHOME_RENT'],
     desc: '행복주택·국민임대·영구임대·통합공공임대·매입/전세임대. 소득·자산 기준으로 뽑고, 부모님이 60세 이상이어도 유주택으로 봅니다.' },
+  { key: 'sh',         label: 'SH 서울주택도시공사', icon: '🏙️', kinds: ['SH'],
+    desc: '장기전세·청년안심주택·행복주택·매입임대·미리내집 등. SH는 공고 API가 없어 공고 게시판을 직접 읽어옵니다 — 일정·조건은 공고 원문을 확인하세요.' },
+  { key: 'hug',        label: 'HUG 든든전세',       icon: '🛡️', kinds: ['HUG'],
+    desc: 'HUG가 전세보증금을 대신 갚고 매입한 주택을 공공임대로 공급합니다. 소득·자산 기준이 없고 무주택세대구성원이면 신청할 수 있습니다.' },
   { key: 'welfare',    label: '주거복지',           icon: '💚', kinds: ['LH_WELFARE'],
     desc: '주거취약계층·고령자 등 대상 주거지원 공고.' },
 ];
@@ -352,3 +356,55 @@ export function normalizeMyhome(r, kindHint) {
 
 /** 어느 필드든 '서울'이 들어 있으면 서울 공고로 본다 */
 export const myhomeIsSeoul = (r) => /서울/.test(JSON.stringify(r));
+
+// ── SH·HUG 게시판 수집분 정규화 ──────────────────────────────────────
+export function normalizeSh(r) {
+  return {
+    kind: 'SH', kindLabel: r.type, source: 'SH',
+    houseManageNo: r.seq, pblancNo: r.seq, id: `SH:${r.seq}`,
+    name: r.title,
+    areaName: '서울', address: '',
+    gu: guFromAddress(r.title),
+    totalUnits: null,
+    noticeDate: toISO(r.date),
+    // 게시판 목록에는 접수기간이 없다 — 지어내지 않고 '일정 미상'으로 둔다
+    receiptStart: null, receiptEnd: null, rank1Start: null, rank1End: null,
+    resultDate: null, contractStart: null, contractEnd: null, moveIn: '',
+    developer: 'SH 서울주택도시공사', builder: '', tel: '1600-3456',
+    homepage: 'https://www.i-sh.co.kr/', noticeUrl: r.url,
+    subType: r.dept, scheduleUnknown: true,
+    attachments: [], models: [], cmpet: null, score: null, flags: {},
+  };
+}
+
+export function normalizeHug(r) {
+  const [from, to] = String(r.period || '').split(/\s*[~\-–]\s*/);
+  const area = n(r.area);
+  const deposit = n(r.deposit);
+  const toManwon = (v) => (v == null ? null : v >= 1000000 ? Math.round(v / 10000) : v);
+  const addr = [r.sido, r.sigungu, r.address].filter(Boolean).join(' ');
+
+  return {
+    kind: 'HUG', kindLabel: r.houseType || '든든전세주택', source: 'HUG',
+    houseManageNo: r.no, pblancNo: r.no, id: `HUG:${r.no}`,
+    name: `${r.sigungu || ''} ${r.address || ''}`.trim() || `든든전세주택 ${r.no}`,
+    areaName: r.sido || '서울', address: addr,
+    gu: guFromAddress(addr),
+    totalUnits: 1,
+    noticeDate: toISO(r.noticeDate),
+    receiptStart: toISO(from), receiptEnd: toISO(to) || toISO(from),
+    rank1Start: toISO(from), rank1End: toISO(to) || toISO(from),
+    resultDate: null, contractStart: null, contractEnd: null, moveIn: '',
+    developer: 'HUG 주택도시보증공사', builder: '', tel: '1566-9009',
+    homepage: 'https://www.khug.or.kr/jeonse/web/s07/s070101.jsp',
+    noticeUrl: r.url,
+    subType: r.buyType, scheduleUnknown: !from,
+    attachments: [],
+    models: [{
+      modelNo: r.no, houseType: r.houseType || '전용', exclusiveArea: area,
+      supplyArea: null, generalUnits: 1, specialUnits: 0, special: {},
+      priceManwon: null, depositManwon: toManwon(deposit), monthlyManwon: null,
+    }],
+    cmpet: null, score: null, flags: {},
+  };
+}
