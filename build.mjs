@@ -34,7 +34,29 @@ if (!key) {
   process.exit(1);
 }
 
+// 직전 스냅샷 — 상류 API 장애로 텅 빈 결과가 나왔을 때 덮어쓰지 않기 위한 기준
+const prevPath = path.join(OUT, 'data', 'listings.json');
+let prev = null;
+try { prev = JSON.parse(fs.readFileSync(prevPath, 'utf8')); } catch { /* 첫 빌드 */ }
+
 const data = await collectListings(key);
+
+/**
+ * 청약홈·LH 같은 상류 API는 가끔 오류가 아니라 '0건'을 돌려준다.
+ * 그대로 배포하면 사이트가 비고, 다음 정상 빌드 때 전부 '새 공고'로 잡혀
+ * 알림이 폭주한다. 직전보다 크게 줄면 배포하지 않고 이전 데이터를 지킨다.
+ */
+if (prev?.listings?.length) {
+  const before = prev.listings.length;
+  const after = data.listings.length;
+  if (after < before * 0.6) {
+    log(`::warning::수집 결과가 ${before}건 → ${after}건으로 급감했습니다. 상류 API 장애로 보고 데이터를 갱신하지 않습니다.`);
+    data.errors.forEach((e) => log(`  ⚠︎ ${e}`));
+    copyAssets();   // 화면 코드는 최신으로 두되 데이터는 그대로 둔다
+    log('화면 코드만 반영하고 종료합니다.');
+    process.exit(0);
+  }
+}
 
 log(`상세 보강 (${data.listings.length}건)`);
 let last = 0;
