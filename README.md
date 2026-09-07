@@ -87,6 +87,25 @@ cd ~/Desktop/seoul-cheongyak
 
 `config.json`은 `.gitignore`에 들어 있어 커밋되지 않습니다. 인증키는 이 컴퓨터를 벗어나지 않습니다.
 
+### 새 공고 이메일 알림
+
+30분마다 갱신할 때 **직전 스냅샷과 비교해 새로 올라온 공고**를 찾고, `watch.json` 조건에 맞는 것만
+메일로 보냅니다. 게시판 수집분은 「당첨자 발표」·「안내」가 섞이므로 **모집공고만** 보냅니다.
+
+조건은 저장소의 [`watch.json`](watch.json)에서 바꿉니다 — 코너, 관심 자치구, 최대 분양가/보증금,
+전용면적 범위, 해당 특별공급. 고쳐서 커밋하면 다음 갱신부터 반영됩니다.
+
+받으려면 저장소 시크릿 세 개가 필요합니다(Gmail 기준).
+
+```bash
+gh secret set MAIL_USERNAME --body "보내는-지메일@gmail.com"
+gh secret set MAIL_PASSWORD --body "앱-비밀번호-16자리"
+gh secret set MAIL_TO       --body "받을-메일@example.com"
+```
+
+`MAIL_PASSWORD`는 지메일 로그인 비밀번호가 아니라 [Google 계정 › 앱 비밀번호](https://myaccount.google.com/apppasswords)에서
+만든 16자리입니다(2단계 인증이 켜져 있어야 나옵니다). 시크릿이 없으면 발송 단계만 조용히 건너뜁니다.
+
 ### 코드 자동 동기화
 
 `start.sh`는 서버와 함께 `autosync.mjs`를 띄웁니다. 이 폴더의 파일을 고치면 **8초 뒤 알아서 커밋하고 GitHub에 푸시**합니다.
@@ -147,6 +166,8 @@ build.mjs       정적 사이트 빌드 (docs/ 생성) — GitHub Actions가 30�
                 --assets 를 주면 화면 코드만 복사 (API 호출 없음)
 myhome.mjs      마이홈포털 통합 공고 API (SH·지방공사 포함)
 scrape.mjs      SH·HUG 공개 게시판 수집 (Open API가 없는 두 기관)
+notify.mjs      직전 스냅샷과 비교해 새 공고를 찾고 알림 메일 본문 생성
+watch.json      이메일 알림 조건
 collect.mjs     공고 수집·상세 보강 (서버와 빌드가 공유)
 api.mjs         청약홈 OpenAPI 클라이언트 (분양정보 10종 / 경쟁률 8종)
 lh.mjs          LH OpenAPI 클라이언트 (공고문·공급정보·상세정보)
