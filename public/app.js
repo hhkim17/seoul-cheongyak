@@ -34,12 +34,25 @@ const SPECIAL_TYPES = [
   { key: 'institution',label: '기관추천',   field: 'institution' },
 ];
 
-const KINDS = [
-  { key: 'APT', label: '아파트' },
-  { key: 'REMNDR', label: '무순위/잔여' },
-  { key: 'URBTY', label: '오피스텔·도시형' },
-  { key: 'RENT', label: '공공지원임대' },
+// GitHub Pages 등 정적 호스팅에서는 서버 API가 없으므로 빌드된 스냅샷을 읽는다.
+const STATIC = !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+
+// 코너 = 제도별 묶음. 빌드 스냅샷이 주면 그걸 쓰고, 없으면 이 기본값을 쓴다.
+const DEFAULT_CORNERS = [
+  { key: 'apt', label: '아파트 분양', icon: '🏢', kinds: ['APT'], desc: '민영·국민주택 일반분양. 청약통장과 가점이 필요합니다.' },
+  { key: 'remnant', label: '무순위·잔여세대', icon: '🎯', kinds: ['REMNDR'], desc: '미계약·부적격 물량 재공급. 가점 없이 추첨이라 통장이 약해도 노려볼 수 있습니다.' },
+  { key: 'officetel', label: '오피스텔·도시형', icon: '🏬', kinds: ['URBTY'], desc: '오피스텔·도시형생활주택·생활형숙박시설. 청약통장 없이 추첨으로 뽑습니다.' },
+  { key: 'publicrent', label: '공공지원 민간임대', icon: '🤝', kinds: ['RENT'], desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
+  { key: 'lhsale', label: 'LH 분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE'], desc: 'LH 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
+  { key: 'lhrent', label: 'LH 임대주택', icon: '🏠', kinds: ['LH_RENT'], desc: '행복주택·국민임대·영구임대·매입임대·전세임대. 소득·자산 기준으로 뽑습니다.' },
+  { key: 'welfare', label: '주거복지', icon: '💚', kinds: ['LH_WELFARE'], desc: '주거취약계층·고령자 등 대상 주거지원 공고.' },
 ];
+let CORNERS = DEFAULT_CORNERS;
+
+// 임대 공고는 분양가가 아니라 보증금·월세로 읽어야 한다
+const RENTAL_KINDS = ['RENT', 'LH_RENT', 'LH_WELFARE'];
+const isRental = (l) => RENTAL_KINDS.includes(l.kind);
+const cornerOf = (l) => l.corner || CORNERS.find((c) => c.kinds.includes(l.kind))?.key || 'apt';
 
 const STATUSES = [
   { key: 'live', label: '접수중' },
@@ -88,7 +101,7 @@ const DEFAULT_PROFILE = {
 let profile = { ...DEFAULT_PROFILE, ...JSON.parse(localStorage.getItem('cheongyak.profile') || '{}') };
 const saveProfile = () => localStorage.setItem('cheongyak.profile', JSON.stringify(profile));
 
-let filters = { status: ['live', 'soon', 'result'], kind: ['APT', 'REMNDR', 'URBTY', 'RENT'], gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
+let filters = { status: ['live', 'soon', 'result'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
 let listings = [];
 let meta = {};
 
@@ -232,7 +245,6 @@ function chipRow(container, options, selected, onToggle) {
 
 function renderFilters() {
   chipRow($('#fStatus'), STATUSES, filters.status, (k) => { toggle(filters.status, k); renderAll(); });
-  chipRow($('#fKind'), KINDS, filters.kind, (k) => { toggle(filters.kind, k); renderAll(); });
   const gus = SEOUL_GU.filter((g) => listings.some((l) => l.gu === g)).map((g) => ({ key: g, label: g }));
   chipRow($('#fGu'), gus, filters.gu, (k) => { toggle(filters.gu, k); renderAll(); });
   $('#fSort').value = filters.sort;
@@ -241,12 +253,29 @@ function renderFilters() {
 }
 const toggle = (arr, k) => { const i = arr.indexOf(k); i < 0 ? arr.push(k) : arr.splice(i, 1); };
 
+function renderCorners() {
+  const nav = $('#corners'); nav.innerHTML = '';
+  // 상태 필터만 적용한 모수로 코너별 건수를 센다 (탭을 눌러도 숫자가 흔들리지 않게)
+  const pool = listings.filter((l) => filters.status.includes(statusOf(l).key));
+  const count = (key) => key === 'all' ? pool.length : pool.filter((l) => cornerOf(l) === key).length;
+
+  const tabs = [{ key: 'all', label: '전체', icon: '📋', desc: '서울에서 지금 열려 있는 모든 공고입니다.' }, ...CORNERS];
+  for (const c of tabs) {
+    const n = count(c.key);
+    const b = el('button', `corner-tab${filters.corner === c.key ? ' on' : ''}${n === 0 ? ' empty' : ''}`,
+      `<span>${c.icon}</span><span>${esc(c.label)}</span><span class="n">${n}</span>`);
+    b.onclick = () => { filters.corner = c.key; renderAll(); };
+    nav.appendChild(b);
+  }
+  $('#cornerDesc').textContent = tabs.find((c) => c.key === filters.corner)?.desc || '';
+}
+
 function visible() {
   return listings
     .map((l) => ({ l, a: analyze(l) }))
     .filter(({ l, a }) => {
       if (filters.status.length && !filters.status.includes(a.status.key)) return false;
-      if (filters.kind.length && !filters.kind.includes(l.kind)) return false;
+      if (filters.corner !== 'all' && cornerOf(l) !== filters.corner) return false;
       if (filters.gu.length && !(l.gu && filters.gu.includes(l.gu))) return false;
       if (filters.budgetOnly && a.pricedCount > 0 && a.affordable === 0) return false;
       if (filters.eligibleOnly && !a.eligibleSpecial.length) return false;
@@ -501,7 +530,7 @@ function schedulePoll(ms) {
 // 탭으로 돌아오면 즉시 한 번 맞춘다
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
 
-function renderAll() { renderMeCard(); renderFilters(); renderCards(); }
+function renderAll() { renderMeCard(); renderCorners(); renderFilters(); renderCards(); }
 
 function showSetup() { $('#setup').hidden = false; $('#app').hidden = true; }
 function showApp() { $('#setup').hidden = true; $('#app').hidden = false; }
@@ -526,7 +555,7 @@ $('#fSort').onchange = (e) => { filters.sort = e.target.value; renderCards(); };
 $('#fBudget').onchange = (e) => { filters.budgetOnly = e.target.checked; renderCards(); };
 $('#fEligible').onchange = (e) => { filters.eligibleOnly = e.target.checked; renderCards(); };
 $('#fReset').onclick = () => {
-  filters = { status: ['live', 'soon', 'result'], kind: KINDS.map((k) => k.key), gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
+  filters = { status: ['live', 'soon', 'result'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
   renderAll();
 };
 
