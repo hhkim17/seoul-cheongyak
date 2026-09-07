@@ -91,6 +91,7 @@ export function normalizeApt(r) {
     rank2End: toISO(r.GNRL_RNK2_CRSPAREA_ENDDE),
     receiptStart: toISO(r.RCEPT_BGNDE),
     receiptEnd: toISO(r.RCEPT_ENDDE),
+    noticeKind: '모집',
     flags: {
       speculative: s(r.SPECLT_RDN_EARTH_AT) === 'Y',   // 투기과열지구
       regulated: s(r.MDAT_TRGET_AREA_SECD) === 'Y',    // 조정대상지역
@@ -112,6 +113,7 @@ export function normalizeRemndr(r) {
     receiptEnd: toISO(r.SUBSCRPT_RCEPT_ENDDE) || toISO(r.GNRL_RCEPT_ENDDE),
     rank1Start: toISO(r.GNRL_RCEPT_BGNDE),
     rank1End: toISO(r.GNRL_RCEPT_ENDDE),
+    noticeKind: '모집',
     flags: {},
   };
 }
@@ -125,6 +127,7 @@ export function normalizeUrbty(r) {
     receiptEnd: toISO(r.SUBSCRPT_RCEPT_ENDDE),
     rank1Start: toISO(r.SUBSCRPT_RCEPT_BGNDE),
     rank1End: toISO(r.SUBSCRPT_RCEPT_ENDDE),
+    noticeKind: '모집',
     flags: {},
   };
 }
@@ -138,6 +141,7 @@ export function normalizeRent(r) {
     receiptEnd: toISO(r.SUBSCRPT_RCEPT_ENDDE) || toISO(r.RCEPT_ENDDE),
     rank1Start: toISO(r.SUBSCRPT_RCEPT_BGNDE) || toISO(r.RCEPT_BGNDE),
     rank1End: toISO(r.SUBSCRPT_RCEPT_ENDDE) || toISO(r.RCEPT_ENDDE),
+    noticeKind: '모집',
     flags: {},
   };
 }
@@ -219,6 +223,20 @@ export const CORNERS = [
   { key: 'welfare',    label: '주거복지',           icon: '💚', kinds: ['LH_WELFARE'],
     desc: '주거취약계층·고령자 등 대상 주거지원 공고.' },
 ];
+
+/**
+ * 공고 제목으로 성격을 가른다.
+ *  모집 — 입주자를 뽑는 공고 (정정공고 포함)
+ *  발표 — 당첨자·서류심사대상자 발표, 동호배정, 계약 안내 등 이미 끝난 건의 후속
+ *  안내 — 그 밖의 공지
+ * 청약홈 공고는 제목이 단지명뿐이라 분류하지 않고 '모집'으로 둔다.
+ */
+export function classifyNotice(title, fallback = '안내') {
+  const t = String(title || '');
+  if (/(당첨자|서류\s*심사|합격자|예비자\s*발표|예비\s*입주자\s*발표|동호\s*배정|사전\s*방문|계약\s*안내|입주\s*안내|결과\s*발표)/.test(t)) return '발표';
+  if (/(모집|공급\s*공고|청약\s*접수|입주자\s*선정)/.test(t)) return '모집';
+  return fallback;
+}
 
 export const cornerOf = (kind) => CORNERS.find((c) => c.kinds.includes(kind))?.key || 'apt';
 
@@ -379,7 +397,7 @@ export function normalizeMyhome(r, kindHint) {
     homepage: pick(r, 'pcUrl'),
     noticeUrl: pick(r, 'url') || pick(r, 'pcUrl'),
     subType: [inst, pick(r, 'sttusNm')].filter(Boolean).join(' · '),
-    noticeKind: pick(r, 'sttusNm').includes('정정') ? '정정' : '모집',
+    noticeKind: classifyNotice(name, '모집'),
     heating: pick(r, 'heatMthdNm'),
     attachments: [],
     models: (model.generalUnits || model.depositManwon || model.priceManwon) ? [model] : [],
@@ -407,7 +425,7 @@ export function normalizeSh(r) {
     developer: 'SH 서울주택도시공사', builder: '', tel: '1600-3456',
     homepage: 'https://www.i-sh.co.kr/', noticeUrl: r.url,
     subType: r.dept, scheduleUnknown: true,
-    noticeKind: r.noticeKind,   // 모집 / 발표 / 안내
+    noticeKind: r.noticeKind || classifyNotice(r.title),   // 모집 / 발표 / 안내
     attachments: [], models: [], cmpet: null, score: null, flags: {},
   };
 }
