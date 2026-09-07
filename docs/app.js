@@ -63,7 +63,7 @@ const STATUSES = [
   { key: 'live', label: '접수중' },
   { key: 'soon', label: '접수예정' },
   { key: 'result', label: '발표대기' },
-  { key: 'notice', label: '공고 확인' },
+  { key: 'notice', label: '일정 미상' },
   { key: 'done', label: '종료' },
 ];
 
@@ -142,7 +142,7 @@ function statusOf(l) {
   if (next) return { key: 'soon', label: `${next.label} 예정`, until: next.from, d: dayDiff(next.from) };
   if (l.resultDate && l.resultDate >= TODAY) return { key: 'result', label: '당첨자 발표 대기', until: l.resultDate, d: dayDiff(l.resultDate) };
   // 게시판에서 긁어온 공고는 접수 일정이 목록에 없다. 마감으로 단정하지 않는다.
-  if (!w.length && l.scheduleUnknown) return { key: 'notice', label: '공고 게시 — 일정은 원문 확인', until: l.noticeDate, d: null };
+  if (!w.length && l.scheduleUnknown) return { key: 'notice', label: '접수 일정은 공고문 확인', until: l.noticeDate, d: null };
   return { key: 'done', label: '접수 마감', until: w.at(-1)?.to || l.receiptEnd, d: null };
 }
 
@@ -342,6 +342,17 @@ function renderFilters() {
 }
 const toggle = (arr, k) => { const i = arr.indexOf(k); i < 0 ? arr.push(k) : arr.splice(i, 1); };
 
+/**
+ * 접수기간을 알 수 없는 공고(SH 게시판 등, 일정이 첨부 공고문 안에만 있는 경우)는
+ * 접수중·접수예정을 볼 때 함께 보여준다. 빼 버리면 진행 중인 공고를 통째로 놓친다.
+ */
+function passesStatus(a) {
+  if (!filters.status.length) return true;
+  if (filters.status.includes(a.status.key)) return true;
+  const wantsOpen = filters.status.includes('live') || filters.status.includes('soon');
+  return a.status.key === 'notice' && wantsOpen;
+}
+
 /** 당첨자 발표·서류심사 안내 같은 후속 공지는 기본으로 감춘다 */
 const isRecruit = (l) => !l.noticeKind || l.noticeKind === '모집';
 const visibleKind = (l) => filters.showAnnouncements || isRecruit(l);
@@ -349,7 +360,7 @@ const visibleKind = (l) => filters.showAnnouncements || isRecruit(l);
 function renderCorners() {
   const nav = $('#corners'); nav.innerHTML = '';
   // 상태 필터만 적용한 모수로 코너별 건수를 센다 (탭을 눌러도 숫자가 흔들리지 않게)
-  const pool = listings.filter((l) => visibleKind(l) && filters.status.includes(statusOf(l).key));
+  const pool = listings.filter((l) => visibleKind(l) && passesStatus({ status: statusOf(l) }));
   const count = (key) => key === 'all' ? pool.length
     : key === 'scrap' ? listings.filter((l) => scraps.has(l.id)).length
     : pool.filter((l) => cornerOf(l) === key).length;
@@ -376,7 +387,7 @@ function visible() {
       // 스크랩 탭에서는 담아 둔 것을 상태와 무관하게 전부 보여준다
       if (filters.corner === 'scrap') return scraps.has(l.id);
       if (!visibleKind(l)) return false;
-      if (filters.status.length && !filters.status.includes(a.status.key)) return false;
+      if (!passesStatus(a)) return false;
       if (filters.corner !== 'all' && cornerOf(l) !== filters.corner) return false;
       if (filters.gu.length && !(l.gu && filters.gu.includes(l.gu))) return false;
       if (filters.budgetOnly && a.pricedCount > 0 && a.affordable === 0) return false;
