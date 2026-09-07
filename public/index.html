@@ -104,11 +104,25 @@
     <fieldset>
       <legend>청약 가점 (84점 만점)</legend>
       <div class="grid3">
-        <label class="field"><span>무주택 기간 (년)</span><input id="pNoHouse" type="number" min="0" max="30" step="1" value="0"></label>
-        <label class="field"><span>청약통장 가입기간 (년)</span><input id="pAccount" type="number" min="0" max="30" step="0.5" value="0"></label>
-        <label class="field"><span>부양가족 수 (본인 제외)</span><input id="pFamily" type="number" min="0" max="10" step="1" value="0"></label>
+        <label class="field"><span>생년월</span><input id="pBirth" type="month"></label>
+        <label class="field"><span>청약통장 가입연월</span><input id="pAccountYm" type="month"></label>
+        <label class="field"><span>부양가족 수 <span class="hint">(본인 제외)</span></span><input id="pFamily" type="number" min="0" max="10" step="1" value="0"></label>
+      </div>
+      <div class="grid3" style="margin-top:10px">
+        <label class="field"><span>혼인신고일 <span class="hint">(선택)</span></span><input id="pMarriage" type="date"></label>
+        <label class="field" style="grid-column: span 2"><span>무주택이 된 날 <span class="hint">(집을 팔아 무주택이 된 적이 있을 때만)</span></span><input id="pNoHouseSince" type="date"></label>
       </div>
       <div id="scoreOut" class="score-out"></div>
+      <details class="help">
+        <summary>무주택 기간은 어떻게 계산되나요? — 부모님이 집이 있는 경우</summary>
+        <ul>
+          <li>무주택 기간은 <b>본인과 배우자</b>만 봅니다. <b>만 30세가 되는 날</b>부터 세고, 30세 전에 혼인했다면 <b>혼인신고일</b>부터 셉니다.</li>
+          <li>부모님(직계존속)이 집이 있어도 <b>만 60세 이상</b>이면 그 집은 없는 것으로 봅니다. 그러니 <b>부모님이 60세 되신 시점을 적는 게 아니라</b>, 본인 만 30세(또는 혼인신고일)부터 그대로 세면 됩니다.</li>
+          <li>다만 <b>노부모부양 특별공급</b>과 <b>LH·SH 등 공공임대</b>에서는 60세 이상 직계존속의 집도 <b>유주택으로 봅니다.</b> 이 코너의 공고는 부모님 주택 소유 여부를 따로 확인하세요.</li>
+          <li>본인·배우자가 집을 소유한 적이 있으면 <b>판 뒤 무주택이 된 날</b>부터 다시 셉니다 — 위 칸에 그 날짜를 넣으세요.</li>
+        </ul>
+        <p>정확한 판정은 <a href="https://www.applyhome.co.kr/ap/apa/selectSbscrptPnttCalculationView.do" target="_blank" rel="noopener">청약홈 가점 계산기</a>와 모집공고문을 확인하세요.</p>
+      </details>
     </fieldset>
 
     <fieldset>
