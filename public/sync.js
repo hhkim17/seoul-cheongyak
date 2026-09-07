@@ -18,7 +18,20 @@ const loadScript = (src) => new Promise((res, rej) => {
   document.head.appendChild(s);
 });
 
+let providers = null;   // 켜져 있는 외부 로그인 제공자
+
 export const user = () => currentUser;
+export const hasProvider = (name) => !providers || providers.includes(name);
+
+/** 어떤 로그인 방식이 켜져 있는지 미리 확인한다 (안 켜진 버튼으로 보내지 않기 위해) */
+async function loadProviders() {
+  try {
+    const res = await fetch(`${SUPABASE.url}/auth/v1/settings`, { headers: { apikey: SUPABASE.key } });
+    const d = await res.json();
+    providers = Object.entries(d.external || {}).filter(([, on]) => on).map(([k]) => k);
+  } catch { providers = null; }
+  return providers;
+}
 export const enabled = () => !!SUPABASE.url && !!SUPABASE.key;
 
 /** 로그인 상태가 바뀔 때마다 onChange(user)를 부른다 */
@@ -29,6 +42,7 @@ export async function initAuth(onChange) {
     client = window.supabase.createClient(SUPABASE.url, SUPABASE.key, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     });
+    await loadProviders();
     const { data } = await client.auth.getSession();
     currentUser = data.session?.user ?? null;
     client.auth.onAuthStateChange((_e, session) => {
@@ -53,6 +67,9 @@ export async function signInWithEmail(email) {
 }
 
 export async function signInWithKakao() {
+  if (providers && !providers.includes('kakao')) {
+    throw new Error('카카오 로그인이 아직 켜져 있지 않습니다. 아래 이메일 로그인을 쓰거나 Supabase에서 카카오 제공자를 켜 주세요.');
+  }
   const { error } = await client.auth.signInWithOAuth({
     provider: 'kakao',
     options: { redirectTo: location.href.split('#')[0] },

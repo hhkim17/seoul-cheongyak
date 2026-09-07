@@ -824,6 +824,11 @@ async function pullAndApply() {
 
 function openAuth() {
   renderAuth(Sync.user());
+  // 카카오가 아직 안 켜져 있으면 눌러도 오류 화면으로 가므로 미리 알린다
+  const kakaoOn = Sync.hasProvider('kakao');
+  $('#btnKakao').disabled = !kakaoOn;
+  $('#btnKakao').style.opacity = kakaoOn ? '1' : '.45';
+  $('#btnKakao').title = kakaoOn ? '' : '카카오 로그인은 아직 설정 전입니다';
   $('#authMsg').textContent = ''; $('#authMsg').className = 'msg';
   $('#syncMsg').textContent = ''; $('#syncMsg').className = 'msg';
   $('#authModal').hidden = false;
