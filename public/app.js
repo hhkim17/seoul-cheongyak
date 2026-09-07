@@ -1,0 +1,568 @@
+// 서울 청약 대시보드 — 프론트엔드
+
+const $ = (s) => document.querySelector(s);
+const el = (t, cls, html) => { const e = document.createElement(t); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const TODAY = new Date().toISOString().slice(0, 10);
+const dayDiff = (iso) => iso ? Math.round((new Date(iso + 'T00:00:00') - new Date(TODAY + 'T00:00:00')) / 86400000) : null;
+const fmtDate = (iso) => iso ? iso.replace(/-/g, '.').slice(2) : '—';
+const num = (v) => (v == null || Number.isNaN(v)) ? '—' : v.toLocaleString('ko-KR');
+
+/** 만원 → "8.4억" */
+function eok(manwon) {
+  if (manwon == null) return '—';
+  const v = manwon / 10000;
+  return v >= 10 ? `${v.toFixed(1)}억` : `${v.toFixed(2)}억`;
+}
+/** 평단가(만원/평) */
+function pyeongPrice(m) {
+  const area = m.supplyArea || m.exclusiveArea;
+  if (!m.priceManwon || !area) return null;
+  return Math.round(m.priceManwon / (area / 3.305785));
+}
+
+const SEOUL_GU = ['강남구','강동구','강북구','강서구','관악구','광진구','구로구','금천구','노원구','도봉구','동대문구','동작구','마포구','서대문구','서초구','성동구','성북구','송파구','양천구','영등포구','용산구','은평구','종로구','중구','중랑구'];
+
+const SPECIAL_TYPES = [
+  { key: 'newlywed',   label: '신혼부부',   field: 'newlywed' },
+  { key: 'firstLife',  label: '생애최초',   field: 'firstLife' },
+  { key: 'multichild', label: '다자녀',     field: 'multichild' },
+  { key: 'oldParents', label: '노부모부양', field: 'oldParents' },
+  { key: 'youth',      label: '청년',       field: 'youth' },
+  { key: 'newborn',    label: '신생아',     field: 'newborn' },
+  { key: 'institution',label: '기관추천',   field: 'institution' },
+];
+
+const KINDS = [
+  { key: 'APT', label: '아파트' },
+  { key: 'REMNDR', label: '무순위/잔여' },
+  { key: 'URBTY', label: '오피스텔·도시형' },
+  { key: 'RENT', label: '공공지원임대' },
+];
+
+const STATUSES = [
+  { key: 'live', label: '접수중' },
+  { key: 'soon', label: '접수예정' },
+  { key: 'result', label: '발표대기' },
+  { key: 'done', label: '종료' },
+];
+
+// ── 청약 가점 계산 (주택공급규칙 별표1) ───────────────────────────────
+function noHouseScore(y) { if (!y || y < 1) return 2; return Math.min(32, 2 + Math.floor(y) * 2); }
+function accountScore(y) {
+  if (!y || y < 0.5) return 1;
+  if (y < 1) return 2;
+  return Math.min(17, 3 + (Math.floor(y) - 1));
+}
+function familyScore(n) { return Math.min(35, 5 + (Number(n) || 0) * 5); }
+function totalScore(p) { return noHouseScore(p.noHouseYears) + accountScore(p.accountYears) + familyScore(p.family); }
+
+// ── 상태 판정 ────────────────────────────────────────────────────────
+function windows(l) {
+  const w = [];
+  if (l.specialStart) w.push({ label: '특별공급 접수', from: l.specialStart, to: l.specialEnd || l.specialStart });
+  if (l.rank1Start) w.push({ label: l.kind === 'APT' ? '1순위 (해당지역)' : '접수', from: l.rank1Start, to: l.rank1End || l.rank1Start });
+  if (l.kind === 'APT' && l.rank1EtcStart) w.push({ label: '1순위 (기타지역)', from: l.rank1EtcStart, to: l.rank1EtcEnd || l.rank1EtcStart });
+  if (l.kind === 'APT' && l.rank2Start) w.push({ label: '2순위', from: l.rank2Start, to: l.rank2End || l.rank2Start });
+  if (!w.length && l.receiptStart) w.push({ label: '청약 접수', from: l.receiptStart, to: l.receiptEnd || l.receiptStart });
+  return w.filter((x) => x.from).sort((a, b) => a.from.localeCompare(b.from));
+}
+
+function statusOf(l) {
+  const w = windows(l);
+  const open = w.find((x) => x.from <= TODAY && TODAY <= x.to);
+  if (open) return { key: 'live', label: `${open.label} 접수중`, until: open.to, d: dayDiff(open.to) };
+  const next = w.find((x) => x.from > TODAY);
+  if (next) return { key: 'soon', label: `${next.label} 예정`, until: next.from, d: dayDiff(next.from) };
+  if (l.resultDate && l.resultDate >= TODAY) return { key: 'result', label: '당첨자 발표 대기', until: l.resultDate, d: dayDiff(l.resultDate) };
+  return { key: 'done', label: '접수 마감', until: w.at(-1)?.to || l.receiptEnd, d: null };
+}
+
+// ── 프로필 ───────────────────────────────────────────────────────────
+const DEFAULT_PROFILE = {
+  noHouseYears: 0, accountYears: 0, family: 0,
+  budgetEok: 9, areaMin: 49, areaMax: 99,
+  special: [], gu: [], seoulResident: true,
+};
+let profile = { ...DEFAULT_PROFILE, ...JSON.parse(localStorage.getItem('cheongyak.profile') || '{}') };
+const saveProfile = () => localStorage.setItem('cheongyak.profile', JSON.stringify(profile));
+
+let filters = { status: ['live', 'soon', 'result'], kind: ['APT', 'REMNDR', 'URBTY', 'RENT'], gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
+let listings = [];
+let meta = {};
+
+// ── 맞춤 점수 ────────────────────────────────────────────────────────
+function analyze(l) {
+  const budgetManwon = profile.budgetEok * 10000;
+  const myScore = totalScore(profile);
+  const models = l.models || [];
+  const priced = models.filter((m) => m.priceManwon);
+  const affordable = priced.filter((m) => m.priceManwon <= budgetManwon);
+  const inArea = models.filter((m) => m.exclusiveArea != null && m.exclusiveArea >= profile.areaMin && m.exclusiveArea <= profile.areaMax);
+
+  const eligibleSpecial = SPECIAL_TYPES.filter((t) =>
+    profile.special.includes(t.key) && models.some((m) => (m.special?.[t.field] || 0) > 0));
+
+  const st = statusOf(l);
+  const reasons = [];
+  let score = 0;
+
+  // 예산 (35)
+  if (!priced.length) { score += 12; reasons.push({ t: '분양가 미공개', neg: false }); }
+  else if (!affordable.length) { reasons.push({ t: `예산 초과 (최저 ${eok(Math.min(...priced.map((m) => m.priceManwon)))})`, neg: true }); }
+  else {
+    const ratio = affordable.length / priced.length;
+    score += 18 + Math.round(17 * ratio);
+    reasons.push({ t: `예산 내 ${affordable.length}/${priced.length}개 타입` });
+  }
+
+  // 면적 (15)
+  if (inArea.length) { score += 10 + Math.round(5 * (inArea.length / Math.max(models.length, 1))); reasons.push({ t: `선호 면적 ${inArea.length}개 타입` }); }
+  else if (models.length) reasons.push({ t: '선호 면적대 없음', neg: true });
+
+  // 지역 (15)
+  if (!profile.gu.length) score += 9;
+  else if (l.gu && profile.gu.includes(l.gu)) { score += 15; reasons.push({ t: `관심 자치구 · ${l.gu}` }); }
+
+  // 자격 / 당첨 가능성 (25)
+  if (eligibleSpecial.length) {
+    score += 25;
+    reasons.push({ t: `특별공급 해당 · ${eligibleSpecial.map((t) => t.label).join('·')}` });
+  } else if (l.kind === 'REMNDR') {
+    score += 20;
+    reasons.push({ t: '무순위 — 가점 무관 추첨' });
+  } else if (l.kind === 'URBTY') {
+    score += 18;
+    reasons.push({ t: '청약통장 가점 무관 (추첨)' });
+  } else {
+    const cut = cutlineFor(l);
+    if (cut != null) {
+      const margin = myScore - cut;
+      score += Math.max(0, Math.min(25, 12 + margin * 1.5));
+      reasons.push({ t: `내 가점 ${myScore} vs 유사 커트라인 ${cut}`, neg: margin < 0 });
+    } else {
+      score += 10;
+      reasons.push({ t: `내 가점 ${myScore}점` });
+    }
+  }
+
+  // 타이밍 (10)
+  if (st.key === 'live') { score += 10; }
+  else if (st.key === 'soon') { score += st.d <= 7 ? 9 : st.d <= 30 ? 7 : 4; }
+  else if (st.key === 'result') { score += 2; }
+
+  const prices = priced.map((m) => m.priceManwon);
+  const areas = models.map((m) => m.exclusiveArea).filter((a) => a != null);
+  const pp = priced.map(pyeongPrice).filter(Boolean);
+
+  return {
+    status: st,
+    score: Math.max(0, Math.min(100, Math.round(score))),
+    reasons,
+    affordable: affordable.length,
+    pricedCount: priced.length,
+    minPrice: prices.length ? Math.min(...prices) : null,
+    maxPrice: prices.length ? Math.max(...prices) : null,
+    minArea: areas.length ? Math.min(...areas) : null,
+    maxArea: areas.length ? Math.max(...areas) : null,
+    pyeong: pp.length ? Math.round(pp.reduce((a, b) => a + b, 0) / pp.length) : null,
+    eligibleSpecial,
+    myScore,
+    cmpetAvg: cmpetAverage(l),
+  };
+}
+
+/** 해당지역 1순위 평균 경쟁률 */
+function cmpetAverage(l) {
+  const rows = (l.cmpet || []).filter((r) => {
+    const rate = parseFloat(String(r.CMPET_RATE || '').replace(/[^0-9.]/g, ''));
+    if (!Number.isFinite(rate)) return false;
+    if (l.kind === 'APT') return r.RESIDE_SECD === '01' && String(r.SUBSCRPT_RANK_CODE ?? '1') === '1';
+    return true;
+  }).map((r) => parseFloat(String(r.CMPET_RATE).replace(/[^0-9.]/g, '')));
+  if (!rows.length) return null;
+  return Math.round((rows.reduce((a, b) => a + b, 0) / rows.length) * 10) / 10;
+}
+
+/** 같은 자치구의 최근 당첨 커트라인(최저가점) 중앙값 — 없으면 서울 전체 */
+let cutlineCache = null;
+function buildCutlines() {
+  const byGu = {}; const all = [];
+  for (const l of listings) {
+    for (const r of l.score || []) {
+      const v = parseFloat(r.LWET_SCORE);
+      if (!Number.isFinite(v) || v <= 0) continue;
+      if (r.RESIDE_SECD && r.RESIDE_SECD !== '01') continue;
+      all.push(v);
+      if (l.gu) (byGu[l.gu] ||= []).push(v);
+    }
+  }
+  const med = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return Math.round(s[Math.floor(s.length / 2)]); };
+  cutlineCache = { byGu: Object.fromEntries(Object.entries(byGu).map(([k, v]) => [k, med(v)])), all: med(all) };
+}
+function cutlineFor(l) {
+  if (!cutlineCache) buildCutlines();
+  if (l.gu && cutlineCache.byGu[l.gu] != null) return cutlineCache.byGu[l.gu];
+  return cutlineCache.all;
+}
+
+// ── 렌더링 ───────────────────────────────────────────────────────────
+function renderMeCard() {
+  const s = totalScore(profile);
+  $('#meCard').innerHTML = `
+    <div class="big">${s}<span style="font-size:13px;color:var(--text-3)"> / 84점</span></div>
+    <div class="sub">내 청약 가점</div>
+    <div class="row"><span>무주택 ${profile.noHouseYears}년</span><b>${noHouseScore(profile.noHouseYears)}점</b></div>
+    <div class="row"><span>통장 ${profile.accountYears}년</span><b>${accountScore(profile.accountYears)}점</b></div>
+    <div class="row"><span>부양가족 ${profile.family}명</span><b>${familyScore(profile.family)}점</b></div>
+    <div class="row" style="margin-top:8px;border-top:1px solid var(--line-soft);padding-top:8px">
+      <span>예산</span><b>${profile.budgetEok}억</b></div>
+    <div class="row"><span>선호 전용</span><b>${profile.areaMin}~${profile.areaMax}㎡</b></div>`;
+}
+
+function chipRow(container, options, selected, onToggle) {
+  container.innerHTML = '';
+  for (const o of options) {
+    const c = el('button', 'chip' + (selected.includes(o.key) ? ' on' : ''), esc(o.label));
+    c.onclick = () => onToggle(o.key);
+    container.appendChild(c);
+  }
+}
+
+function renderFilters() {
+  chipRow($('#fStatus'), STATUSES, filters.status, (k) => { toggle(filters.status, k); renderAll(); });
+  chipRow($('#fKind'), KINDS, filters.kind, (k) => { toggle(filters.kind, k); renderAll(); });
+  const gus = SEOUL_GU.filter((g) => listings.some((l) => l.gu === g)).map((g) => ({ key: g, label: g }));
+  chipRow($('#fGu'), gus, filters.gu, (k) => { toggle(filters.gu, k); renderAll(); });
+  $('#fSort').value = filters.sort;
+  $('#fBudget').checked = filters.budgetOnly;
+  $('#fEligible').checked = filters.eligibleOnly;
+}
+const toggle = (arr, k) => { const i = arr.indexOf(k); i < 0 ? arr.push(k) : arr.splice(i, 1); };
+
+function visible() {
+  return listings
+    .map((l) => ({ l, a: analyze(l) }))
+    .filter(({ l, a }) => {
+      if (filters.status.length && !filters.status.includes(a.status.key)) return false;
+      if (filters.kind.length && !filters.kind.includes(l.kind)) return false;
+      if (filters.gu.length && !(l.gu && filters.gu.includes(l.gu))) return false;
+      if (filters.budgetOnly && a.pricedCount > 0 && a.affordable === 0) return false;
+      if (filters.eligibleOnly && !a.eligibleSpecial.length) return false;
+      return true;
+    })
+    .sort((x, y) => {
+      switch (filters.sort) {
+        case 'deadline': {
+          const rank = (a) => a.status.key === 'live' ? 0 : a.status.key === 'soon' ? 1 : a.status.key === 'result' ? 2 : 3;
+          return (rank(x.a) - rank(y.a)) || ((x.a.status.d ?? 9e9) - (y.a.status.d ?? 9e9));
+        }
+        case 'recent': return (y.l.noticeDate || '').localeCompare(x.l.noticeDate || '');
+        case 'priceAsc': return (x.a.minPrice ?? 9e9) - (y.a.minPrice ?? 9e9);
+        case 'cmpetAsc': return (x.a.cmpetAvg ?? 9e9) - (y.a.cmpetAvg ?? 9e9);
+        default: return y.a.score - x.a.score;
+      }
+    });
+}
+
+function renderCards() {
+  const rows = visible();
+  const cards = $('#cards'); cards.innerHTML = '';
+  $('#empty').hidden = rows.length > 0;
+  if (!rows.length) $('#empty').textContent = listings.length ? '조건에 맞는 공고가 없습니다. 필터를 넓혀 보세요.' : '공고를 불러오는 중입니다…';
+
+  const live = rows.filter((r) => r.a.status.key === 'live').length;
+  const soon = rows.filter((r) => r.a.status.key === 'soon').length;
+  const fit = rows.filter((r) => r.a.affordable > 0).length;
+  $('#summary').innerHTML = `
+    <div class="stat"><b>${rows.length}</b><span>표시 중인 공고</span></div>
+    <div class="stat"><b style="color:var(--good)">${live}</b><span>지금 접수중</span></div>
+    <div class="stat"><b style="color:var(--warn)">${soon}</b><span>접수 예정</span></div>
+    <div class="stat"><b>${fit}</b><span>예산 내 타입 있음</span></div>`;
+
+  for (const { l, a } of rows) cards.appendChild(cardOf(l, a));
+}
+
+function cardOf(l, a) {
+  const c = el('div', 'card');
+  const tier = a.score >= 70 ? 'hi' : a.score >= 45 ? 'mid' : 'lo';
+  const st = a.status;
+  const dText = st.d == null ? '' : st.key === 'live' ? `D-${st.d}` : st.d === 0 ? 'D-DAY' : `D-${st.d}`;
+
+  c.innerHTML = `
+    <div class="card-head">
+      <div>
+        <h3>${esc(l.name)}</h3>
+        <div class="where">${esc(l.gu || l.areaName || '서울')} · ${esc(l.subType || l.kindLabel)}${l.totalUnits ? ` · 총 ${num(l.totalUnits)}세대` : ''}</div>
+      </div>
+      <div class="match ${tier}"><b>${a.score}</b><span>맞춤도</span></div>
+    </div>
+    <div class="badges">
+      <span class="badge ${st.key === 'live' ? 'live' : st.key === 'soon' ? 'soon' : 'done'}">${esc(st.label)}${dText ? ` · ${dText}` : ''}</span>
+      <span class="badge tag">${esc(l.kindLabel)}</span>
+      ${l.flags?.priceCap ? '<span class="badge">분양가상한제</span>' : ''}
+      ${l.flags?.speculative ? '<span class="badge hot">투기과열</span>' : ''}
+      ${a.cmpetAvg != null ? `<span class="badge ${a.cmpetAvg >= 20 ? 'hot' : ''}">경쟁률 ${a.cmpetAvg}:1</span>` : ''}
+    </div>
+    <div class="kv">
+      <div><span>분양가</span><b>${a.minPrice != null ? `${eok(a.minPrice)} ~ ${eok(a.maxPrice)}` : '미공개'}</b></div>
+      <div><span>평당가</span><b>${a.pyeong ? `${num(a.pyeong)}만원` : '—'}</b></div>
+      <div><span>전용면적</span><b>${a.minArea != null ? `${a.minArea} ~ ${a.maxArea}㎡` : '—'}</b></div>
+      <div><span>${st.key === 'done' ? '당첨발표' : '주요 일정'}</span><b>${fmtDate(st.until)}</b></div>
+    </div>
+    <div class="reasons">${a.reasons.slice(0, 3).map((r) => `<span class="reason${r.neg ? ' neg' : ''}">${esc(r.t)}</span>`).join('')}</div>`;
+  c.onclick = () => openDrawer(l.id);
+  return c;
+}
+
+// ── 상세 패널 ────────────────────────────────────────────────────────
+async function openDrawer(id) {
+  const drawer = $('#drawer'); const panel = $('#drawerPanel');
+  drawer.hidden = false;
+  panel.innerHTML = '<button class="close-x" data-close>✕</button><p style="color:var(--text-3)">불러오는 중…</p>';
+  panel.scrollTop = 0;
+  let l = listings.find((x) => x.id === id);
+  try {
+    const res = await fetch(`/api/listing?id=${encodeURIComponent(id)}`);
+    if (res.ok) { const full = await res.json(); Object.assign(l, full); }
+  } catch { /* 캐시된 내용으로 표시 */ }
+  panel.innerHTML = drawerHTML(l, analyze(l));
+}
+
+function drawerHTML(l, a) {
+  const w = windows(l);
+  const budgetManwon = profile.budgetEok * 10000;
+
+  const tl = [
+    ...(l.noticeDate ? [{ lbl: '모집공고', from: l.noticeDate, to: l.noticeDate }] : []),
+    ...w.map((x) => ({ lbl: x.label, from: x.from, to: x.to })),
+    ...(l.resultDate ? [{ lbl: '당첨자 발표', from: l.resultDate, to: l.resultDate }] : []),
+    ...(l.contractStart ? [{ lbl: '계약', from: l.contractStart, to: l.contractEnd || l.contractStart }] : []),
+  ];
+
+  const models = (l.models || []).slice().sort((x, y) => (x.exclusiveArea ?? 0) - (y.exclusiveArea ?? 0));
+  const hasSpecial = models.some((m) => m.specialUnits > 0);
+
+  const modelRows = models.map((m) => {
+    const fits = m.priceManwon != null && m.priceManwon <= budgetManwon;
+    const pp = pyeongPrice(m);
+    return `<tr class="${fits ? 'fit' : m.priceManwon != null ? 'over' : ''}">
+      <td>${esc(m.houseType)}</td>
+      <td>${m.exclusiveArea ?? '—'}</td>
+      <td>${num(m.generalUnits)}</td>
+      ${hasSpecial ? `<td>${num(m.specialUnits)}</td>` : ''}
+      <td><b>${eok(m.priceManwon)}</b></td>
+      <td>${pp ? num(pp) : '—'}</td>
+      <td>${m.priceManwon == null ? '—' : fits ? '✓ 예산 내' : '초과'}</td>
+    </tr>`;
+  }).join('');
+
+  const cmpetRows = (l.cmpet || []).map((r) => `<tr>
+      <td>${esc(r.HOUSE_TY || '—')}</td>
+      <td>${esc(r.RESIDE_SENM || r.SPSPLY_KND_NM || r.RESIDNT_PRIOR_SENM || '—')}</td>
+      <td>${esc(r.SUBSCRPT_RANK_CODE ? r.SUBSCRPT_RANK_CODE + '순위' : '—')}</td>
+      <td>${num(Number(r.SUPLY_HSHLDCO ?? r.SPSPLY_KND_HSHLDCO))}</td>
+      <td>${num(Number(r.REQ_CNT))}</td>
+      <td><b>${esc(r.CMPET_RATE ?? '—')}</b></td>
+    </tr>`).join('');
+
+  const scoreRows = (l.score || []).map((r) => `<tr>
+      <td>${esc(r.HOUSE_TY)}</td><td>${esc(r.RESIDE_SENM || '—')}</td>
+      <td>${esc(r.LWET_SCORE)}</td><td>${esc(r.AVRG_SCORE)}</td><td>${esc(r.TOP_SCORE)}</td>
+      <td>${Number(r.LWET_SCORE) > 0 ? (a.myScore >= Number(r.LWET_SCORE) ? '<b style="color:var(--good)">내 가점 통과</b>' : `<span style="color:var(--hot)">${Number(r.LWET_SCORE) - a.myScore}점 부족</span>`) : '—'}</td>
+    </tr>`).join('');
+
+  const spOffered = SPECIAL_TYPES.filter((t) => models.some((m) => (m.special?.[t.field] || 0) > 0));
+
+  return `
+  <button class="close-x" data-close>✕</button>
+  <h2>${esc(l.name)}</h2>
+  <p class="lead small">${esc(l.address || '')}</p>
+  <div class="badges" style="margin-top:10px">
+    <span class="badge ${a.status.key === 'live' ? 'live' : a.status.key === 'soon' ? 'soon' : 'done'}">${esc(a.status.label)}</span>
+    <span class="badge tag">${esc(l.kindLabel)}${l.subType ? ' · ' + esc(l.subType) : ''}</span>
+    ${l.totalUnits ? `<span class="badge">총 ${num(l.totalUnits)}세대</span>` : ''}
+    ${l.flags?.priceCap ? '<span class="badge">분양가상한제</span>' : ''}
+    ${l.flags?.speculative ? '<span class="badge hot">투기과열지구</span>' : ''}
+    ${l.flags?.regulated ? '<span class="badge hot">조정대상지역</span>' : ''}
+  </div>
+
+  <section>
+    <h3>내 조건 맞춤도 ${a.score}점</h3>
+    <div class="reasons">${a.reasons.map((r) => `<span class="reason${r.neg ? ' neg' : ''}">${esc(r.t)}</span>`).join('')}</div>
+    ${spOffered.length ? `<p class="lead small" style="margin-top:10px">이 단지의 특별공급: ${spOffered.map((t) => esc(t.label)).join(' · ')}</p>` : ''}
+  </section>
+
+  <section>
+    <h3>청약 일정</h3>
+    <div class="timeline">${tl.map((t) => {
+      const cls = t.to < TODAY ? 'past' : (t.from <= TODAY && TODAY <= t.to) ? 'now' : 'next';
+      const d = dayDiff(t.from);
+      const dd = cls === 'next' ? ` · D-${d}` : cls === 'now' ? ' · 진행중' : '';
+      return `<div class="tl ${cls}"><div class="dot"></div><div class="lbl">${esc(t.lbl)}${dd}</div>
+        <div class="dt">${fmtDate(t.from)}${t.to !== t.from ? ` ~ ${fmtDate(t.to)}` : ''}</div></div>`;
+    }).join('')}</div>
+    ${l.moveIn ? `<p class="lead small" style="margin-top:8px">입주 예정 ${esc(l.moveIn.replace(/^(\d{4})(\d{2})$/, '$1년 $2월'))}</p>` : ''}
+  </section>
+
+  <section>
+    <h3>주택형별 공급 · 분양가</h3>
+    ${models.length ? `<div class="tablewrap"><table>
+      <thead><tr><th>주택형</th><th>전용㎡</th><th>일반</th>${hasSpecial ? '<th>특공</th>' : ''}<th>분양가</th><th>평당(만)</th><th>내 예산</th></tr></thead>
+      <tbody>${modelRows}</tbody></table></div>` : '<p class="lead small">주택형 정보가 아직 없습니다.</p>'}
+  </section>
+
+  ${cmpetRows ? `<section><h3>청약 경쟁률</h3><div class="tablewrap"><table>
+    <thead><tr><th>주택형</th><th>구분</th><th>순위</th><th>공급</th><th>접수</th><th>경쟁률</th></tr></thead>
+    <tbody>${cmpetRows}</tbody></table></div></section>` : ''}
+
+  ${scoreRows ? `<section><h3>당첨 가점 (내 가점 ${a.myScore}점)</h3><div class="tablewrap"><table>
+    <thead><tr><th>주택형</th><th>지역</th><th>최저</th><th>평균</th><th>최고</th><th>판정</th></tr></thead>
+    <tbody>${scoreRows}</tbody></table></div></section>` : ''}
+
+  <section>
+    <h3>사업 정보</h3>
+    <div class="kv" style="grid-template-columns:repeat(2,1fr);gap:10px">
+      ${l.developer ? `<div><span>시행사</span><b>${esc(l.developer)}</b></div>` : ''}
+      ${l.builder ? `<div><span>시공사</span><b>${esc(l.builder)}</b></div>` : ''}
+      ${l.tel ? `<div><span>문의</span><b>${esc(l.tel)}</b></div>` : ''}
+      ${l.noticeDate ? `<div><span>모집공고일</span><b>${fmtDate(l.noticeDate)}</b></div>` : ''}
+    </div>
+    <p style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+      ${l.noticeUrl ? `<a href="${esc(l.noticeUrl)}" target="_blank" rel="noopener">청약홈 공고 원문 ↗</a>` : ''}
+      ${l.homepage ? `<a href="${esc(l.homepage)}" target="_blank" rel="noopener">분양 홈페이지 ↗</a>` : ''}
+    </p>
+  </section>`;
+}
+
+// ── 프로필 모달 ──────────────────────────────────────────────────────
+function openProfile() {
+  $('#pNoHouse').value = profile.noHouseYears;
+  $('#pAccount').value = profile.accountYears;
+  $('#pFamily').value = profile.family;
+  $('#pBudget').value = profile.budgetEok;
+  $('#pAreaMin').value = profile.areaMin;
+  $('#pAreaMax').value = profile.areaMax;
+  $('#pSeoulResident').checked = profile.seoulResident;
+  renderProfileChips();
+  updateScoreOut();
+  $('#profileModal').hidden = false;
+}
+
+// 칩만 다시 그린다 — 입력 중인 숫자 필드 값을 건드리지 않기 위해
+function renderProfileChips() {
+  chipRow($('#pSpecial'), SPECIAL_TYPES, profile.special, (k) => { toggle(profile.special, k); renderProfileChips(); });
+  chipRow($('#pGu'), SEOUL_GU.map((g) => ({ key: g, label: g })), profile.gu, (k) => { toggle(profile.gu, k); renderProfileChips(); });
+}
+
+function updateScoreOut() {
+  const p = {
+    noHouseYears: +$('#pNoHouse').value || 0,
+    accountYears: +$('#pAccount').value || 0,
+    family: +$('#pFamily').value || 0,
+  };
+  $('#scoreOut').innerHTML = `총 <b>${totalScore(p)}점</b> &nbsp;·&nbsp; 무주택 ${noHouseScore(p.noHouseYears)} + 통장 ${accountScore(p.accountYears)} + 부양가족 ${familyScore(p.family)}`;
+}
+
+// ── 데이터 로드 ──────────────────────────────────────────────────────
+async function load(refresh = false) {
+  $('#status').textContent = refresh ? '청약홈에서 다시 가져오는 중…' : '불러오는 중…';
+  const res = await fetch(`/api/listings${refresh ? '?refresh=1' : ''}`);
+  if (res.status === 428) { showSetup(); return; }
+  const data = await res.json();
+  if (!res.ok) { $('#status').textContent = `오류: ${data.error}`; return; }
+
+  listings = data.listings || [];
+  meta = data;
+  cutlineCache = null;
+
+  const t = new Date(data.fetchedAt);
+  const auto = data.autoRefreshMinutes ? ` · ${data.autoRefreshMinutes}분마다 자동 갱신` : '';
+  $('#status').textContent = `서울 공고 ${listings.length}건 · ${t.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })} 기준${auto}`;
+
+  const banner = $('#banner');
+  const notes = [...(data.errors || [])];
+  if (data.enriching) notes.push(`상세 정보(분양가·경쟁률) 수집 중 ${data.progress.done}/${data.progress.total} — 잠시 후 자동 갱신됩니다.`);
+  banner.hidden = !notes.length;
+  banner.textContent = notes.join('  |  ');
+
+  renderAll();
+  schedulePoll(data.enriching ? 6000 : POLL_MS);
+}
+
+// 서버가 주기적으로 새로 받아오므로, 화면도 알아서 따라간다
+const POLL_MS = 3 * 60 * 1000;
+let pollTimer = null;
+function schedulePoll(ms) {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(() => load(false), ms);
+}
+// 탭으로 돌아오면 즉시 한 번 맞춘다
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
+
+function renderAll() { renderMeCard(); renderFilters(); renderCards(); }
+
+function showSetup() { $('#setup').hidden = false; $('#app').hidden = true; }
+function showApp() { $('#setup').hidden = true; $('#app').hidden = false; }
+
+// ── 이벤트 ───────────────────────────────────────────────────────────
+$('#keySave').onclick = async () => {
+  const msg = $('#keyMsg'); msg.className = 'msg'; msg.textContent = '확인 중…';
+  const res = await fetch('/api/key', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ serviceKey: $('#keyInput').value }),
+  });
+  const data = await res.json();
+  if (!res.ok) { msg.className = 'msg err'; msg.textContent = data.error; return; }
+  msg.className = 'msg ok'; msg.textContent = '연결됐습니다. 공고를 불러옵니다…';
+  showApp(); load(true);
+};
+$('#keyInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#keySave').click(); });
+
+$('#btnRefresh').onclick = () => load(true);   // 목록만 다시 받기 (빠름)
+$('#btnProfile').onclick = openProfile;
+$('#fSort').onchange = (e) => { filters.sort = e.target.value; renderCards(); };
+$('#fBudget').onchange = (e) => { filters.budgetOnly = e.target.checked; renderCards(); };
+$('#fEligible').onchange = (e) => { filters.eligibleOnly = e.target.checked; renderCards(); };
+$('#fReset').onclick = () => {
+  filters = { status: ['live', 'soon', 'result'], kind: KINDS.map((k) => k.key), gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
+  renderAll();
+};
+
+for (const id of ['pNoHouse', 'pAccount', 'pFamily']) $('#' + id).addEventListener('input', updateScoreOut);
+
+$('#pSave').onclick = () => {
+  profile = {
+    ...profile,
+    noHouseYears: +$('#pNoHouse').value || 0,
+    accountYears: +$('#pAccount').value || 0,
+    family: +$('#pFamily').value || 0,
+    budgetEok: +$('#pBudget').value || 0,
+    areaMin: +$('#pAreaMin').value || 0,
+    areaMax: +$('#pAreaMax').value || 999,
+    seoulResident: $('#pSeoulResident').checked,
+  };
+  saveProfile();
+  $('#profileModal').hidden = true;
+  renderAll();
+};
+
+document.addEventListener('click', (e) => {
+  if (e.target.matches('[data-close]')) {
+    $('#drawer').hidden = true;
+    $('#profileModal').hidden = true;
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { $('#drawer').hidden = true; $('#profileModal').hidden = true; }
+});
+
+// ── 시작 ─────────────────────────────────────────────────────────────
+(async () => {
+  const h = await (await fetch('/api/health')).json();
+  if (!h.hasKey) { showSetup(); return; }
+  showApp();
+  renderMeCard();
+  load(false);
+})();

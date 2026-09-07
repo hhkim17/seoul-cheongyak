@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>서울 청약 대시보드</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🏙️</text></svg>">
+</head>
+<body>
+
+<!-- 인증키 등록 -->
+<section id="setup" class="setup" hidden>
+  <div class="setup-card">
+    <h1>서울 청약 대시보드</h1>
+    <p class="lead">한국부동산원 <b>청약홈</b> 공식 OpenAPI에 직접 연결해 서울 분양·무순위·오피스텔 공고를 실시간으로 가져옵니다. 시작하려면 공공데이터포털 인증키가 한 번 필요합니다.</p>
+    <ol class="steps">
+      <li><a href="https://www.data.go.kr/data/15098547/openapi.do" target="_blank" rel="noopener">청약홈 분양정보 조회 서비스</a> → <b>활용신청</b> (개발계정은 자동승인)</li>
+      <li><a href="https://www.data.go.kr/data/15098905/openapi.do" target="_blank" rel="noopener">청약접수 경쟁률 조회 서비스</a> → <b>활용신청</b> (경쟁률·당첨가점용)</li>
+      <li><a href="https://www.data.go.kr/iim/api/selectAPIAcountView.do" target="_blank" rel="noopener">마이페이지 › 인증키</a>에서 <b>일반 인증키(Decoding)</b> 복사</li>
+    </ol>
+    <label class="field">
+      <span>일반 인증키 <span class="hint">(Decoding / Encoding 둘 다 인식합니다)</span></span>
+      <input id="keyInput" type="password" autocomplete="off" spellcheck="false" placeholder="포털에서 복사한 인증키를 그대로 붙여넣으세요">
+    </label>
+    <button id="keySave" class="primary">연결하기</button>
+    <p id="keyMsg" class="msg"></p>
+    <p class="fineprint">인증키는 이 컴퓨터의 <code>config.json</code>에만 저장되고, 브라우저나 외부로 전송되지 않습니다.</p>
+  </div>
+</section>
+
+<!-- 본 화면 -->
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🏙️</span>
+      <div>
+        <h1>서울 청약 대시보드</h1>
+        <p id="status" class="status">불러오는 중…</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="btnProfile" class="ghost">내 조건 설정</button>
+      <button id="btnRefresh" class="ghost" title="청약홈에서 다시 가져오기">새로고침</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="rail">
+      <div class="me-card" id="meCard"></div>
+
+      <div class="filter-group">
+        <h3>진행 상태</h3>
+        <div id="fStatus" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <h3>공급 유형</h3>
+        <div id="fKind" class="chips"></div>
+      </div>
+      <div class="filter-group">
+        <h3>자치구</h3>
+        <div id="fGu" class="chips scroll"></div>
+      </div>
+      <div class="filter-group">
+        <h3>정렬</h3>
+        <select id="fSort">
+          <option value="match">내 조건 맞춤순</option>
+          <option value="deadline">마감 임박순</option>
+          <option value="recent">최신 공고순</option>
+          <option value="priceAsc">분양가 낮은순</option>
+          <option value="cmpetAsc">경쟁률 낮은순</option>
+        </select>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="fBudget"> 내 예산 안에 드는 곳만
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="fEligible"> 내 자격 해당 특별공급만
+      </label>
+      <button id="fReset" class="ghost small">필터 초기화</button>
+    </aside>
+
+    <section class="content">
+      <div id="banner" class="banner" hidden></div>
+      <div id="summary" class="summary"></div>
+      <div id="cards" class="cards"></div>
+      <div id="empty" class="empty" hidden></div>
+    </section>
+  </main>
+</div>
+
+<!-- 상세 패널 -->
+<div id="drawer" class="drawer" hidden>
+  <div class="drawer-scrim" data-close></div>
+  <div class="drawer-panel" id="drawerPanel"></div>
+</div>
+
+<!-- 내 조건 -->
+<div id="profileModal" class="modal" hidden>
+  <div class="modal-scrim" data-close></div>
+  <div class="modal-panel">
+    <h2>내 조건 설정</h2>
+    <p class="lead small">여기 입력한 값으로 가점을 계산하고, 각 공고의 분양가·면적·특별공급 배정·과거 커트라인과 맞춰 맞춤 점수를 매깁니다.</p>
+
+    <fieldset>
+      <legend>청약 가점 (84점 만점)</legend>
+      <div class="grid3">
+        <label class="field"><span>무주택 기간 (년)</span><input id="pNoHouse" type="number" min="0" max="30" step="1" value="0"></label>
+        <label class="field"><span>청약통장 가입기간 (년)</span><input id="pAccount" type="number" min="0" max="30" step="0.5" value="0"></label>
+        <label class="field"><span>부양가족 수 (본인 제외)</span><input id="pFamily" type="number" min="0" max="10" step="1" value="0"></label>
+      </div>
+      <div id="scoreOut" class="score-out"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>예산 · 면적</legend>
+      <div class="grid3">
+        <label class="field"><span>최대 분양가 (억원)</span><input id="pBudget" type="number" min="0" step="0.5" value="9"></label>
+        <label class="field"><span>선호 전용 최소 (㎡)</span><input id="pAreaMin" type="number" min="0" step="1" value="49"></label>
+        <label class="field"><span>선호 전용 최대 (㎡)</span><input id="pAreaMax" type="number" min="0" step="1" value="99"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>해당하는 특별공급</legend>
+      <div id="pSpecial" class="chips"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>관심 자치구 <span class="hint">(비워두면 서울 전체)</span></legend>
+      <div id="pGu" class="chips scroll"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>거주 요건</legend>
+      <label class="toggle"><input type="checkbox" id="pSeoulResident" checked> 서울 거주 (해당지역 1순위 우선공급 대상)</label>
+    </fieldset>
+
+    <div class="modal-actions">
+      <button id="pSave" class="primary">저장</button>
+      <button class="ghost" data-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

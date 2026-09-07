@@ -1,0 +1,9 @@
+# 공공데이터포털 인증키 — 절대 커밋하지 않는다
+config.json
+.env
+
+# API 응답 캐시
+cache/
+
+.DS_Store
+node_modules/
