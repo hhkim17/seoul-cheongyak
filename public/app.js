@@ -172,7 +172,7 @@ const DEFAULT_WATCH = {
 };
 let watchCfg = { ...DEFAULT_WATCH, ...JSON.parse(localStorage.getItem('cheongyak.watch') || '{}') };
 
-let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
+let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false };
 let listings = [];
 let meta = {};
 
@@ -342,10 +342,14 @@ function renderFilters() {
 }
 const toggle = (arr, k) => { const i = arr.indexOf(k); i < 0 ? arr.push(k) : arr.splice(i, 1); };
 
+/** 당첨자 발표·서류심사 안내 같은 후속 공지는 기본으로 감춘다 */
+const isRecruit = (l) => !l.noticeKind || l.noticeKind === '모집';
+const visibleKind = (l) => filters.showAnnouncements || isRecruit(l);
+
 function renderCorners() {
   const nav = $('#corners'); nav.innerHTML = '';
   // 상태 필터만 적용한 모수로 코너별 건수를 센다 (탭을 눌러도 숫자가 흔들리지 않게)
-  const pool = listings.filter((l) => filters.status.includes(statusOf(l).key));
+  const pool = listings.filter((l) => visibleKind(l) && filters.status.includes(statusOf(l).key));
   const count = (key) => key === 'all' ? pool.length
     : key === 'scrap' ? listings.filter((l) => scraps.has(l.id)).length
     : pool.filter((l) => cornerOf(l) === key).length;
@@ -371,6 +375,7 @@ function visible() {
     .filter(({ l, a }) => {
       // 스크랩 탭에서는 담아 둔 것을 상태와 무관하게 전부 보여준다
       if (filters.corner === 'scrap') return scraps.has(l.id);
+      if (!visibleKind(l)) return false;
       if (filters.status.length && !filters.status.includes(a.status.key)) return false;
       if (filters.corner !== 'all' && cornerOf(l) !== filters.corner) return false;
       if (filters.gu.length && !(l.gu && filters.gu.includes(l.gu))) return false;
@@ -890,7 +895,7 @@ $('#fBudget').onchange = (e) => { filters.budgetOnly = e.target.checked; renderC
 $('#fEligible').onchange = (e) => { filters.eligibleOnly = e.target.checked; renderCards(); };
 $('#fAnnounce').onchange = (e) => { filters.showAnnouncements = e.target.checked; renderAll(); };
 $('#fReset').onclick = () => {
-  filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
+  filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false };
   renderAll();
 };
 
