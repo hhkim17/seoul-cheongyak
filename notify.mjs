@@ -36,6 +36,10 @@ if (TEST && !fresh.length) {
 // ── 조건 맞추기 ──────────────────────────────────────────────────────
 const RENTAL = new Set(['RENT', 'LH_RENT', 'LH_WELFARE', 'MYHOME_RENT', 'SH', 'HUG']);
 const manwon = (eok) => (eok == null ? Infinity : eok * 10000);
+
+/** 조건(watch) 하나로 공고를 거르는 판정 함수를 만든다 — 구독자마다 조건이 다르다 */
+function makeMatcher(w) {
+const watch = w;
 const priceCap = manwon(watch['최대분양가_억']);
 const depositCap = manwon(watch['최대보증금_억']);
 const corners = watch['코너'] || [];
@@ -47,7 +51,7 @@ const allowUnpriced = watch['가격정보없어도_알림'] !== false;
 
 const recruitOnly = watch['모집공고만'] !== false;
 
-function matches(l) {
+return function matches(l) {
   if (corners.length && !corners.includes(l.corner)) return false;
   // 게시판 공고는 '당첨자 발표'·'안내'가 섞인다 — 알림은 모집공고만
   if (recruitOnly && l.noticeKind && l.noticeKind !== '모집') return false;
@@ -73,15 +77,42 @@ function matches(l) {
     if (!hit) return false;
   }
   return true;
+};
 }
 
-let hits = fresh.filter(matches);
-console.log(`조건에 맞는 새 공고 ${hits.length}건`);
-if (!hits.length && TEST) {
-  hits = fresh.slice(0, 3);
-  console.log(`[테스트] 조건에 맞는 건이 없어 최근 ${hits.length}건으로 발송을 시험합니다.`);
+// ── 받는 사람 모으기 ────────────────────────────────────────────────
+// 1) 저장소 주인 (watch.json + MAIL_TO)
+// 2) 사이트에서 로그인해 알림을 켠 구독자 (Supabase)
+async function subscribers() {
+  const list = [];
+  const owner = process.env.MAIL_TO || process.env.MAIL_USERNAME;
+  if (owner) list.push({ email: owner, watch, label: '주인' });
+
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_KEY;
+  if (!url || !key) {
+    console.log('Supabase 설정이 없어 구독자 목록은 건너뜁니다.');
+    return list;
+  }
+  try {
+    const res = await fetch(`${url}/rest/v1/profiles?select=email,watch,notify_email&notify_email=eq.true`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rows = await res.json();
+    for (const r of rows) {
+      if (!r.email || list.some((x) => x.email === r.email)) continue;
+      list.push({ email: r.email, watch: { ...watch, ...(r.watch || {}) }, label: '구독자' });
+    }
+    console.log(`구독자 ${rows.length}명을 불러왔습니다.`);
+  } catch (e) {
+    console.log(`구독자 목록을 못 불러왔습니다: ${e.message}`);
+  }
+  return list;
 }
-if (!hits.length) process.exit(0);
+
+const people = await subscribers();
+if (!people.length) { console.log('받는 사람이 없습니다.'); process.exit(0); }
 
 // ── 메일 본문 ────────────────────────────────────────────────────────
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
