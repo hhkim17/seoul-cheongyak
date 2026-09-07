@@ -105,7 +105,7 @@ async function scrapeSection() {
     }
   };
   const [sh, hug] = await Promise.all([
-    run('SH 공고게시판', () => scrapeSh({ pages: 6 }), N.normalizeSh),
+    run('SH 공고게시판', () => scrapeSh({ pages: 6, periodLimit: 20 }), N.normalizeSh),
     run('HUG 든든전세', () => scrapeHug(), N.normalizeHug),
   ]);
   return {
