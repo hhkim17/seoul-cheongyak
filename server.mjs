@@ -13,6 +13,7 @@ import { CORNERS } from './normalize.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
+const WATCH = path.join(ROOT, 'watch.json');
 const PORT = Number(process.env.PORT || 5173);
 const AUTO_REFRESH_MS = Number(process.env.AUTO_REFRESH_MINUTES || 30) * 60000;
 
@@ -119,6 +120,17 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true });
     }
 
+    // 화면에서 저장한 알림 조건을 watch.json에 쓴다. autosync가 곧 GitHub로 올린다.
+    if (p === '/api/watch' && req.method === 'POST') {
+      const body = await readBody(req);
+      if (!body || typeof body !== 'object') return send(res, 400, { error: '잘못된 형식입니다.' });
+      const current = JSON.parse(fs.readFileSync(WATCH, 'utf8'));
+      const next = { ...current, ...body };
+      fs.writeFileSync(WATCH, JSON.stringify(next, null, 2) + '\n');
+      log('알림 조건을 watch.json에 저장했습니다.');
+      return send(res, 200, { ok: true, watch: next });
+    }
+
     if (p === '/api/listings') {
       const key = getServiceKey();
       if (!key) return send(res, 428, { error: 'NO_KEY' });
@@ -129,6 +141,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, {
         fetchedAt: data.fetchedAt, autoRefreshMinutes: AUTO_REFRESH_MS / 60000,
         corners: CORNERS,
+        watch: JSON.parse(fs.readFileSync(WATCH, 'utf8')),
         sources: sourceStatus(data),
         errors, enriching, progress: enrichProgress, listings: data.listings,
       });

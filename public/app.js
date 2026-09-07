@@ -634,6 +634,70 @@ function updateScoreOut() {
      <span class="sub">${esc(note)}</span>`;
 }
 
+// ── 메일 알림 설정 ───────────────────────────────────────────────────
+function openMail() {
+  $('#mPrice').value = watchCfg['최대분양가_억'];
+  $('#mDeposit').value = watchCfg['최대보증금_억'];
+  $('#mAreaMin').value = watchCfg['전용면적_최소'];
+  $('#mAreaMax').value = watchCfg['전용면적_최대'];
+  $('#mUnpriced').checked = watchCfg['가격정보없어도_알림'] !== false;
+  renderMailChips();
+  $('#mailMsg').textContent = '';
+  $('#mailMsg').className = 'msg';
+  $('#mailManual').hidden = true;
+  $('#mailModal').hidden = false;
+}
+
+function renderMailChips() {
+  chipRow($('#mCorners'), CORNERS.map((c) => ({ key: c.key, label: `${c.icon} ${c.label}` })),
+    watchCfg['코너'], (k) => { toggle(watchCfg['코너'], k); renderMailChips(); });
+  chipRow($('#mGu'), SEOUL_GU.map((g) => ({ key: g, label: g })),
+    watchCfg['관심자치구'], (k) => { toggle(watchCfg['관심자치구'], k); renderMailChips(); });
+}
+
+function collectMail() {
+  return {
+    ...watchCfg,
+    '최대분양가_억': +$('#mPrice').value || 0,
+    '최대보증금_억': +$('#mDeposit').value || 0,
+    '전용면적_최소': +$('#mAreaMin').value || 0,
+    '전용면적_최대': +$('#mAreaMax').value || 999,
+    '가격정보없어도_알림': $('#mUnpriced').checked,
+    '모집공고만': true,
+  };
+}
+
+async function saveMail() {
+  watchCfg = collectMail();
+  localStorage.setItem('cheongyak.watch', JSON.stringify(watchCfg));
+  const msg = $('#mailMsg');
+
+  if (STATIC) {
+    // 정적 사이트에는 저장할 서버가 없다 — 붙여 넣을 내용을 보여 준다
+    msg.className = 'msg';
+    msg.textContent = '이 사이트에는 저장할 서버가 없습니다. 아래 내용을 watch.json에 넣어 주세요.';
+    $('#mailJson').textContent = JSON.stringify(watchCfg, null, 2);
+    $('#mailManual').hidden = false;
+    $('#mailManual').open = true;
+    return;
+  }
+  try {
+    const res = await fetch('/api/watch', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(watchCfg),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || '저장 실패');
+    msg.className = 'msg ok';
+    msg.textContent = 'watch.json에 저장했습니다. 자동 동기화가 곧 GitHub에 올려 다음 갱신부터 반영됩니다.';
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = `저장하지 못했습니다: ${e.message}`;
+    $('#mailJson').textContent = JSON.stringify(watchCfg, null, 2);
+    $('#mailManual').hidden = false;
+  }
+}
+
 // ── 데이터 로드 ──────────────────────────────────────────────────────
 async function load(refresh = false) {
   $('#status').textContent = refresh ? '청약홈에서 다시 가져오는 중…' : '불러오는 중…';
@@ -652,6 +716,7 @@ async function load(refresh = false) {
   }
 
   if (Array.isArray(data.corners) && data.corners.length) CORNERS = data.corners;
+  if (data.watch && !localStorage.getItem('cheongyak.watch')) watchCfg = { ...DEFAULT_WATCH, ...data.watch };
   listings = data.listings || [];
   meta = data;
   cutlineCache = null;
@@ -725,6 +790,9 @@ $('#keyInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#k
 
 $('#btnRefresh').onclick = () => load(true);   // 목록만 다시 받기 (빠름)
 $('#btnProfile').onclick = openProfile;
+$('#btnMail').onclick = openMail;
+$('#mSave').onclick = saveMail;
+$('#mailCopy').onclick = () => navigator.clipboard?.writeText($('#mailJson').textContent);
 $('#fSort').onchange = (e) => { filters.sort = e.target.value; renderCards(); };
 $('#fBudget').onchange = (e) => { filters.budgetOnly = e.target.checked; renderCards(); };
 $('#fEligible').onchange = (e) => { filters.eligibleOnly = e.target.checked; renderCards(); };
@@ -752,6 +820,8 @@ $('#pSave').onclick = () => {
 };
 
 document.addEventListener('click', (e) => {
+  const scrapBtn = e.target.closest('#drawerPanel [data-scrap]');
+  if (scrapBtn) { toggleScrap(scrapBtn.dataset.scrap); scrapBtn.classList.toggle('on'); return; }
   if (e.target.matches('[data-close]')) {
     $('#drawer').hidden = true;
     $('#profileModal').hidden = true;
