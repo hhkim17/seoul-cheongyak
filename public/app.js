@@ -4,7 +4,9 @@ const $ = (s) => document.querySelector(s);
 const el = (t, cls, html) => { const e = document.createElement(t); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-const TODAY = new Date().toISOString().slice(0, 10);
+/** toISOString()은 UTC로 바꿔 날짜가 하루 밀린다 — 화면에는 로컬 날짜를 쓴다 */
+const localISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const TODAY = localISO(new Date());
 const dayDiff = (iso) => iso ? Math.round((new Date(iso + 'T00:00:00') - new Date(TODAY + 'T00:00:00')) / 86400000) : null;
 const fmtDate = (iso) => iso ? iso.replace(/-/g, '.').slice(2) : '—';
 const num = (v) => (v == null || Number.isNaN(v)) ? '—' : v.toLocaleString('ko-KR');
@@ -585,7 +587,7 @@ function updateScoreOut() {
     ? '생년월을 넣으면 무주택 기간이 자동으로 계산됩니다.'
     : start > new Date()
       ? `만 30세(${start.getFullYear()}.${String(start.getMonth() + 1).padStart(2, '0')})가 되면 무주택 기간이 쌓이기 시작합니다.`
-      : `무주택 기산일 ${start.toISOString().slice(0, 10)} · ${yr(nh)}${p.accountYm ? ` / 통장 ${yr(ac)}` : ''}`;
+      : `무주택 기산일 ${localISO(start)} · ${yr(nh)}${p.accountYm ? ` / 통장 ${yr(ac)}` : ''}`;
   $('#scoreOut').innerHTML =
     `총 <b>${totalScore(p)}점</b> &nbsp;·&nbsp; 무주택 ${noHouseScore(nh)} + 통장 ${accountScore(ac)} + 부양가족 ${familyScore(p.family)}
      <span class="sub">${esc(note)}</span>`;
