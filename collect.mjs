@@ -141,6 +141,39 @@ const isMyhome = (kind) => kind.startsWith('MYHOME_');
 
 export const state = { cmpetBlocked: false };
 
+/** 이 앱이 쓰는 공공데이터포털 API 목록 — 화면의 “데이터 연결 상태”에 그대로 쓰인다 */
+export const DATA_SOURCES = [
+  { id: 'applyhome-detail', org: '한국부동산원', name: '청약홈 분양정보 조회 서비스',
+    use: '아파트·무순위·오피스텔·공공지원임대 공고와 주택형·분양가',
+    url: 'https://www.data.go.kr/data/15098547/openapi.do', required: true },
+  { id: 'applyhome-cmpet', org: '한국부동산원', name: '청약홈 청약접수 경쟁률 및 특별공급 신청현황 조회 서비스',
+    use: '경쟁률·당첨가점·특별공급 신청현황',
+    url: 'https://www.data.go.kr/data/15098905/openapi.do', required: true },
+  { id: 'lh-notice', org: '한국토지주택공사', name: 'LH 분양임대공고문 조회 서비스',
+    use: '행복주택·국민임대·영구임대·매입/전세임대 등 LH 공고 목록',
+    url: 'https://www.data.go.kr/data/15058530/openapi.do' },
+  { id: 'lh-supply', org: '한국토지주택공사', name: 'LH 분양임대공고별 공급정보 조회 서비스',
+    use: 'LH 공고의 주택형·세대수·임대조건',
+    url: 'https://www.data.go.kr/data/15056765/openapi.do' },
+  { id: 'lh-detail', org: '한국토지주택공사', name: 'LH 분양임대공고별 상세정보 조회 서비스',
+    use: 'LH 공고문 첨부파일(PDF/HWP)',
+    url: 'https://www.data.go.kr/data/15057999/openapi.do' },
+  { id: 'myhome', org: '국토교통부', name: '마이홈포털 공공주택 모집공고 조회 서비스',
+    use: 'SH·지방공사를 포함한 공공임대·공공분양 통합 공고',
+    url: 'https://www.data.go.kr/data/15108420/openapi.do' },
+];
+
+/** 수집 결과로부터 각 API가 지금 붙어 있는지 판정한다 */
+export function sourceStatus({ lhBlocked, myhomeBlocked }) {
+  return DATA_SOURCES.map((s) => {
+    let ok = true;
+    if (s.id === 'applyhome-cmpet') ok = !state.cmpetBlocked;
+    if (s.id.startsWith('lh-')) ok = !lhBlocked;
+    if (s.id === 'myhome') ok = !myhomeBlocked;
+    return { ...s, ok };
+  });
+}
+
 export async function enrich(key, listing, { withCmpet }) {
   const { houseManageNo: h, pblancNo: p, kind } = listing;
   const cacheKey = `enrich_${listing.id}`;

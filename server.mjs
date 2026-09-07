@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { api, ApplyHomeError } from './api.mjs';
 import { getServiceKey, writeConfig, cacheGet, cacheSet, cacheClear, cacheDelete } from './store.mjs';
-import { collectListings, enrich, enrichMany, LIST_TTL, DETAIL_TTL, log, state } from './collect.mjs';
+import { collectListings, enrich, enrichMany, sourceStatus, LIST_TTL, DETAIL_TTL, log, state } from './collect.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
@@ -127,6 +127,7 @@ const server = http.createServer(async (req, res) => {
       if (state.cmpetBlocked) errors.push('경쟁률·당첨가점은 별도 API입니다 — 공공데이터포털에서 “청약홈 청약접수 경쟁률 및 특별공급 신청현황 조회 서비스”도 활용신청해 주세요.');
       return send(res, 200, {
         fetchedAt: data.fetchedAt, autoRefreshMinutes: AUTO_REFRESH_MS / 60000,
+        sources: sourceStatus(data),
         errors, enriching, progress: enrichProgress, listings: data.listings,
       });
     }

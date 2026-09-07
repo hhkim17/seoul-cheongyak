@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getServiceKey } from './store.mjs';
-import { collectListings, enrichMany, isClosed, log, state } from './collect.mjs';
+import { collectListings, enrichMany, isClosed, sourceStatus, log, state } from './collect.mjs';
 import { CORNERS } from './normalize.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -52,6 +52,7 @@ const snapshot = {
   lhBlocked: data.lhBlocked,
   cmpetBlocked: state.cmpetBlocked,
   corners: CORNERS,
+  sources: sourceStatus(data),
   listings: data.listings,
 };
 
