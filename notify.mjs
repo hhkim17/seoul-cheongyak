@@ -142,6 +142,30 @@ const card = (l) => {
   </td></tr><tr><td style="height:10px"></td></tr>`;
 };
 
+/** HTML만 보내면 스팸으로 분류되기 쉽다 — 같은 내용의 텍스트본을 함께 넣는다 */
+function buildText(hits) {
+  const lines = [`내 조건에 맞는 새 청약 공고 ${hits.length}건`, `${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })} 기준`, ''];
+  const byCorner = {};
+  for (const l of hits) (byCorner[l.corner] ||= []).push(l);
+  for (const [k, list] of Object.entries(byCorner)) {
+    lines.push(`■ ${cornerLabel(k)} (${list.length}건)`);
+    for (const l of list) {
+      const rental = RENTAL.has(l.kind);
+      const priceOf = (m) => (rental ? (m.depositManwon ?? m.priceManwon) : m.priceManwon);
+      const prices = (l.models || []).map(priceOf).filter((v) => v != null);
+      lines.push(`  · ${l.name}`);
+      lines.push(`    ${[l.gu, l.kindLabel].filter(Boolean).join(' / ')}` +
+        (prices.length ? ` / ${rental ? '보증금' : '분양가'} ${eok(Math.min(...prices))}~` : '') +
+        (l.receiptStart ? ` / 접수 ${l.receiptStart}` : ' / 일정은 공고문 확인'));
+      if (l.noticeUrl) lines.push(`    ${l.noticeUrl}`);
+    }
+    lines.push('');
+  }
+  lines.push(`전체 보기: ${SITE}`);
+  lines.push('알림을 끄려면 대시보드에서 로그인 후 메일 알림 수신 설정을 꺼 주세요.');
+  return lines.join('\n');
+}
+
 function buildHtml(hits) {
   const byCorner = {};
   for (const l of hits) (byCorner[l.corner] ||= []).push(l);
@@ -170,8 +194,9 @@ for (const person of people) {
   if (!hits.length) continue;
   outbox.push({
     to: person.email,
-    subject: `${TEST ? '[테스트] ' : ''}[서울청약] 내 조건 새 공고 ${hits.length}건 — ${hits.slice(0, 2).map((l) => l.name).join(', ')}${hits.length > 2 ? ' 외' : ''}`,
+    subject: `${TEST ? '(테스트) ' : ''}서울 청약 새 공고 ${hits.length}건 · ${hits[0].name.slice(0, 30)}${hits.length > 1 ? ' 외' : ''}`,
     html: buildHtml(hits),
+    text: buildText(hits),
   });
 }
 

@@ -49,7 +49,17 @@ for (const mail of outbox) {
   try {
     await transport.sendMail({
       from: `서울 청약 대시보드 <${user}>`,
-      to: mail.to, subject: mail.subject, html: mail.html,
+      to: mail.to,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,          // 텍스트본을 함께 보내야 스팸으로 덜 몰린다
+      headers: {
+        // 구독 메일임을 밝히는 표준 헤더 — 스팸 판정을 크게 낮춘다
+        'List-Unsubscribe': `<mailto:${user}?subject=unsubscribe>, <https://hhkim17.github.io/seoul-cheongyak/>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        'List-Id': '서울 청약 대시보드 알림 <cheongyak.hhkim17.github.io>',
+        'Auto-Submitted': 'auto-generated',
+      },
     });
     console.log(`보냄: ${mail.to}`);
     sent++;
