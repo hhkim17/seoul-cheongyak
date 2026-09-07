@@ -367,11 +367,13 @@ async function openDrawer(id) {
   drawer.hidden = false;
   panel.innerHTML = '<button class="close-x" data-close>✕</button><p style="color:var(--text-3)">불러오는 중…</p>';
   panel.scrollTop = 0;
-  let l = listings.find((x) => x.id === id);
-  try {
-    const res = await fetch(`/api/listing?id=${encodeURIComponent(id)}`);
-    if (res.ok) { const full = await res.json(); Object.assign(l, full); }
-  } catch { /* 캐시된 내용으로 표시 */ }
+  const l = listings.find((x) => x.id === id);
+  if (!STATIC) {
+    try {
+      const res = await fetch(`/api/listing?id=${encodeURIComponent(id)}`);
+      if (res.ok) Object.assign(l, await res.json());
+    } catch { /* 캐시된 내용으로 표시 */ }
+  }
   panel.innerHTML = drawerHTML(l, analyze(l));
 }
 
@@ -389,19 +391,30 @@ function drawerHTML(l, a) {
   const models = (l.models || []).slice().sort((x, y) => (x.exclusiveArea ?? 0) - (y.exclusiveArea ?? 0));
   const hasSpecial = models.some((m) => m.specialUnits > 0);
 
+  const priceOf = (m) => (a.rental ? (m.depositManwon ?? m.priceManwon) : m.priceManwon);
   const modelRows = models.map((m) => {
-    const fits = m.priceManwon != null && m.priceManwon <= budgetManwon;
+    const price = priceOf(m);
+    const fits = price != null && price <= budgetManwon;
     const pp = pyeongPrice(m);
-    return `<tr class="${fits ? 'fit' : m.priceManwon != null ? 'over' : ''}">
+    return `<tr class="${fits ? 'fit' : price != null ? 'over' : ''}">
       <td>${esc(m.houseType)}</td>
       <td>${m.exclusiveArea ?? '—'}</td>
       <td>${num(m.generalUnits)}</td>
       ${hasSpecial ? `<td>${num(m.specialUnits)}</td>` : ''}
-      <td><b>${eok(m.priceManwon)}</b></td>
-      <td>${pp ? num(pp) : '—'}</td>
-      <td>${m.priceManwon == null ? '—' : fits ? '✓ 예산 내' : '초과'}</td>
+      <td><b>${eok(price)}</b></td>
+      <td>${a.rental ? (m.monthlyManwon != null ? num(m.monthlyManwon) : '—') : (pp ? num(pp) : '—')}</td>
+      <td>${price == null ? '—' : fits ? '✓ 예산 내' : '초과'}</td>
     </tr>`;
   }).join('');
+
+  const files = l.attachments || [];
+  const filesSection = files.length ? `<section><h3>공고문 첨부</h3><div class="files">${files.map((f) => {
+    const pdf = /\.pdf(\?|$)/i.test(f.url) || /pdf/i.test(f.name);
+    const hwp = /\.hwpx?(\?|$)/i.test(f.url) || /hwp/i.test(f.name);
+    return `<a class="file" href="${esc(f.url)}" target="_blank" rel="noopener">
+      <span class="ico">${pdf ? '📕' : hwp ? '📘' : '📄'}</span>
+      <span class="nm">${esc(f.name)}</span><span class="go">열기 ↗</span></a>`;
+  }).join('')}</div></section>` : '';
 
   const cmpetRows = (l.cmpet || []).map((r) => `<tr>
       <td>${esc(r.HOUSE_TY || '—')}</td>
@@ -451,10 +464,12 @@ function drawerHTML(l, a) {
     ${l.moveIn ? `<p class="lead small" style="margin-top:8px">입주 예정 ${esc(l.moveIn.replace(/^(\d{4})(\d{2})$/, '$1년 $2월'))}</p>` : ''}
   </section>
 
+  ${filesSection}
+
   <section>
-    <h3>주택형별 공급 · 분양가</h3>
+    <h3>${a.rental ? '주택형별 공급 · 임대조건' : '주택형별 공급 · 분양가'}</h3>
     ${models.length ? `<div class="tablewrap"><table>
-      <thead><tr><th>주택형</th><th>전용㎡</th><th>일반</th>${hasSpecial ? '<th>특공</th>' : ''}<th>분양가</th><th>평당(만)</th><th>내 예산</th></tr></thead>
+      <thead><tr><th>주택형</th><th>전용㎡</th><th>${a.rental ? '세대수' : '일반'}</th>${hasSpecial ? '<th>특공</th>' : ''}<th>${a.rental ? '보증금' : '분양가'}</th><th>${a.rental ? '월세(만)' : '평당(만)'}</th><th>내 예산</th></tr></thead>
       <tbody>${modelRows}</tbody></table></div>` : '<p class="lead small">주택형 정보가 아직 없습니다.</p>'}
   </section>
 
@@ -475,7 +490,7 @@ function drawerHTML(l, a) {
       ${l.noticeDate ? `<div><span>모집공고일</span><b>${fmtDate(l.noticeDate)}</b></div>` : ''}
     </div>
     <p style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-      ${l.noticeUrl ? `<a href="${esc(l.noticeUrl)}" target="_blank" rel="noopener">청약홈 공고 원문 ↗</a>` : ''}
+      ${l.noticeUrl ? `<a href="${esc(l.noticeUrl)}" target="_blank" rel="noopener">${l.source === 'LH' ? 'LH 공고 원문' : '청약홈 공고 원문'} ↗</a>` : ''}
       ${l.homepage ? `<a href="${esc(l.homepage)}" target="_blank" rel="noopener">분양 홈페이지 ↗</a>` : ''}
     </p>
   </section>`;
@@ -513,17 +528,27 @@ function updateScoreOut() {
 // ── 데이터 로드 ──────────────────────────────────────────────────────
 async function load(refresh = false) {
   $('#status').textContent = refresh ? '청약홈에서 다시 가져오는 중…' : '불러오는 중…';
-  const res = await fetch(`/api/listings${refresh ? '?refresh=1' : ''}`);
-  if (res.status === 428) { showSetup(); return; }
-  const data = await res.json();
-  if (!res.ok) { $('#status').textContent = `오류: ${data.error}`; return; }
 
+  let data;
+  if (STATIC) {
+    // 정적 배포: 빌드 시점 스냅샷을 읽는다
+    const res = await fetch('data/listings.json', { cache: 'no-cache' });
+    if (!res.ok) { $('#status').textContent = '데이터를 불러오지 못했습니다.'; return; }
+    data = await res.json();
+  } else {
+    const res = await fetch(`/api/listings${refresh ? '?refresh=1' : ''}`);
+    if (res.status === 428) { showSetup(); return; }
+    data = await res.json();
+    if (!res.ok) { $('#status').textContent = `오류: ${data.error}`; return; }
+  }
+
+  if (Array.isArray(data.corners) && data.corners.length) CORNERS = data.corners;
   listings = data.listings || [];
   meta = data;
   cutlineCache = null;
 
-  const t = new Date(data.fetchedAt);
-  const auto = data.autoRefreshMinutes ? ` · ${data.autoRefreshMinutes}분마다 자동 갱신` : '';
+  const t = new Date(data.builtAt || data.fetchedAt);
+  const auto = STATIC ? ' · 30분마다 자동 재빌드' : (data.autoRefreshMinutes ? ` · ${data.autoRefreshMinutes}분마다 자동 갱신` : '');
   $('#status').textContent = `서울 공고 ${listings.length}건 · ${t.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })} 기준${auto}`;
 
   const banner = $('#banner');
@@ -605,9 +630,12 @@ document.addEventListener('keydown', (e) => {
 
 // ── 시작 ─────────────────────────────────────────────────────────────
 (async () => {
+  if (STATIC) {
+    $('#btnRefresh').hidden = true;   // 정적 배포에는 서버가 없다
+    showApp(); renderMeCard(); load(false);
+    return;
+  }
   const h = await (await fetch('/api/health')).json();
   if (!h.hasKey) { showSetup(); return; }
-  showApp();
-  renderMeCard();
-  load(false);
+  showApp(); renderMeCard(); load(false);
 })();
