@@ -193,3 +193,73 @@ export function normalizeUrbtyModel(m) {
     depositManwon: n(m.SUBSCRPT_REQST_AMOUNT),
   };
 }
+
+// ── 코너(공급 유형 묶음) ─────────────────────────────────────────────
+// 화면 상단 탭이자, 각 공고가 어느 제도에 속하는지를 나타내는 분류.
+export const CORNERS = [
+  { key: 'apt',        label: '아파트 분양',        icon: '🏢', kinds: ['APT'],
+    desc: '민영·국민주택 일반분양. 청약통장과 가점이 필요합니다.' },
+  { key: 'remnant',    label: '무순위·잔여세대',    icon: '🎯', kinds: ['REMNDR'],
+    desc: '미계약·부적격 물량 재공급. 가점 없이 추첨이라 통장이 약해도 노려볼 수 있습니다.' },
+  { key: 'officetel',  label: '오피스텔·도시형',    icon: '🏬', kinds: ['URBTY'],
+    desc: '오피스텔·도시형생활주택·생활형숙박시설. 청약통장 없이 추첨으로 뽑습니다.' },
+  { key: 'publicrent', label: '공공지원 민간임대',  icon: '🤝', kinds: ['RENT'],
+    desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
+  { key: 'lhsale',     label: 'LH 분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE'],
+    desc: 'LH 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
+  { key: 'lhrent',     label: 'LH 임대주택',        icon: '🏠', kinds: ['LH_RENT'],
+    desc: '행복주택·국민임대·영구임대·매입임대·전세임대. 소득·자산 기준으로 뽑습니다.' },
+  { key: 'welfare',    label: '주거복지',           icon: '💚', kinds: ['LH_WELFARE'],
+    desc: '주거취약계층·고령자 등 대상 주거지원 공고.' },
+];
+
+export const cornerOf = (kind) => CORNERS.find((c) => c.kinds.includes(kind))?.key || 'apt';
+
+// ── LH 공고 정규화 ───────────────────────────────────────────────────
+// LH 응답 필드명이 문서와 실제가 조금씩 다른 경우가 있어 후보 키를 순서대로 본다.
+const pick = (o, ...keys) => { for (const k of keys) if (o[k] != null && String(o[k]).trim() !== '') return String(o[k]).trim(); return ''; };
+
+const LH_KIND_BY_UPP = { '05': 'LH_SALE', '39': 'LH_SALE', '06': 'LH_RENT', '13': 'LH_WELFARE' };
+
+export function normalizeLh(r) {
+  const upp = pick(r, 'UPP_AIS_TP_CD');
+  const kind = LH_KIND_BY_UPP[upp] || 'LH_RENT';
+  const name = pick(r, 'PAN_NM', 'HSH_NM');
+  const detail = pick(r, 'DTL_URL', 'PAN_DTL_URL');
+  const status = pick(r, 'PAN_SS');
+  const notice = toISO(pick(r, 'PAN_NT_ST_DT', 'PAN_DT'));
+  const start = toISO(pick(r, 'RCPT_ST_DT', 'SBSCRT_RCPT_ST_DT', 'RCEPT_BGNDE')) || notice;
+  const end = toISO(pick(r, 'RCPT_ED_DT', 'SBSCRT_RCPT_ED_DT', 'CLSG_DT'));
+  const addr = pick(r, 'LGDN_DTL_ADR', 'HSH_ADR', 'CNP_CD_NM');
+
+  return {
+    kind,
+    kindLabel: pick(r, 'AIS_TP_CD_NM') || pick(r, 'UPP_AIS_TP_NM') || 'LH 공고',
+    source: 'LH',
+    houseManageNo: pick(r, 'PAN_ID'),
+    pblancNo: pick(r, 'PAN_ID'),
+    id: `${kind}:${pick(r, 'PAN_ID')}`,
+    panId: pick(r, 'PAN_ID'),
+    uppCd: upp,
+    aisTpCd: pick(r, 'AIS_TP_CD'),
+    name,
+    areaName: pick(r, 'CNP_CD_NM') || '서울',
+    address: addr,
+    gu: guFromAddress(addr) || guFromAddress(name),
+    totalUnits: null,
+    noticeDate: notice,
+    receiptStart: start,
+    receiptEnd: end,
+    rank1Start: start,
+    rank1End: end,
+    resultDate: toISO(pick(r, 'PZWR_ANC_DT', 'PRZ_ANC_DT')),
+    contractStart: null, contractEnd: null, moveIn: '',
+    developer: 'LH 한국토지주택공사', builder: '', tel: pick(r, 'TEL_NO', 'CNTC_TEL_NO'),
+    homepage: '', noticeUrl: detail,
+    subType: pick(r, 'AIS_TP_CD_NM'),
+    lhStatus: status,           // 공고중 / 접수중 / 접수마감 / 정정공고중
+    attachments: [],
+    models: [], cmpet: null, score: null,
+    flags: {},
+  };
+}
