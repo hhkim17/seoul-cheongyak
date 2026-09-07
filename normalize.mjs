@@ -233,7 +233,7 @@ export const CORNERS = [
  */
 export function classifyNotice(title, fallback = '안내') {
   const t = String(title || '');
-  if (/(당첨자|서류\s*심사|합격자|예비자\s*발표|예비\s*입주자\s*발표|동호\s*배정|사전\s*방문|계약\s*안내|입주\s*안내|결과\s*발표)/.test(t)) return '발표';
+  if (/(당첨자|서류\s*심사|합격자|입주\s*대상자|대상자\s*발표|예비자\s*발표|명단\s*발표|동호\s*배정|사전\s*방문|계약\s*안내|입주\s*안내|결과\s*발표|추첨\s*결과)/.test(t)) return '발표';
   if (/(모집|공급\s*공고|청약\s*접수|입주자\s*선정)/.test(t)) return '모집';
   return fallback;
 }
@@ -285,6 +285,7 @@ export function normalizeLh(r) {
     developer: 'LH 한국토지주택공사', builder: '', tel: pick(r, 'TEL_NO', 'CNTC_TEL_NO'),
     homepage: '', noticeUrl: detail,
     subType: pick(r, 'AIS_TP_CD_NM'),
+    noticeKind: classifyNotice(name, '모집'),
     lhStatus: status,           // 공고중 / 접수중 / 접수마감 / 정정공고중
     attachments: [],
     models: [], cmpet: null, score: null,

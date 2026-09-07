@@ -22,20 +22,13 @@ const SH_VIEW = 'https://www.i-sh.co.kr/main/lay2/program/S1T1637C1639/www/brd/m
 
 // 게시판에는 채용·입찰·설문도 섞여 있어 주택 공고만 골라낸다
 const SH_KEEP = /(모집\s*공고|입주자\s*모집|청약|공급\s*공고|당첨자|서류심사|예비\s*입주자)/;
-const SH_DROP = /(채용|인턴|입찰|설문|정보공개|계약직|공고문\s*정정\s*없음|인사)/;
+const SH_DROP = /(채용|인턴|입찰|설문|정보공개|계약직|인사|일자리|참여자|상담가|인큐베이팅|강사|위탁|용역|공모전|매각|사원|직원)/;
 
 /** 제목에서 SH 주택 유형을 읽어낸다 */
 const SH_TYPES = ['장기전세주택', '청년안심주택', '행복주택', '매입임대주택', '장기안심주택', '희망하우징',
   '전세임대', '영구임대주택', '재개발임대주택', '두레주택', '사회주택', '도시형생활주택',
   '국민임대', '공공임대', '미리내집', '신혼', '공공분양'];
 const shType = (t) => SH_TYPES.find((k) => t.includes(k)) || 'SH 공고';
-
-/** 같은 게시판에 모집공고와 발표·안내가 섞여 있다. 알림은 '모집'만 보내야 한다. */
-function shNoticeKind(t) {
-  if (/(당첨자|서류심사|예비자|합격자|추가\s*모집\s*대상)/.test(t)) return '발표';
-  if (/(입주자\s*모집|모집\s*공고|공급\s*공고|청약\s*접수)/.test(t)) return '모집';
-  return '안내';
-}
 
 export async function scrapeSh({ pages = 2 } = {}) {
   const out = [];
@@ -50,7 +43,7 @@ export async function scrapeSh({ pages = 2 } = {}) {
       const title = c[1].replace(/^NEW\s*/, '');
       if (!SH_KEEP.test(title) || SH_DROP.test(title)) continue;
       out.push({ seq, no: c[0], title, dept: c[2], date: c[3], url: SH_VIEW + seq,
-        type: shType(title), noticeKind: shNoticeKind(title) });
+        type: shType(title) });   // 모집/발표 분류는 normalize.mjs가 맡는다
     }
     await new Promise((r) => setTimeout(r, 700)); // 서버 배려
   }
