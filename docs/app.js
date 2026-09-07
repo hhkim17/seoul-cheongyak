@@ -4,7 +4,9 @@ const $ = (s) => document.querySelector(s);
 const el = (t, cls, html) => { const e = document.createElement(t); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-const TODAY = new Date().toISOString().slice(0, 10);
+/** toISOString()은 UTC로 바꿔 날짜가 하루 밀린다 — 화면에는 로컬 날짜를 쓴다 */
+const localISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const TODAY = localISO(new Date());
 const dayDiff = (iso) => iso ? Math.round((new Date(iso + 'T00:00:00') - new Date(TODAY + 'T00:00:00')) / 86400000) : null;
 const fmtDate = (iso) => iso ? iso.replace(/-/g, '.').slice(2) : '—';
 const num = (v) => (v == null || Number.isNaN(v)) ? '—' : v.toLocaleString('ko-KR');
@@ -43,8 +45,8 @@ const DEFAULT_CORNERS = [
   { key: 'remnant', label: '무순위·잔여세대', icon: '🎯', kinds: ['REMNDR'], desc: '미계약·부적격 물량 재공급. 가점 없이 추첨이라 통장이 약해도 노려볼 수 있습니다.' },
   { key: 'officetel', label: '오피스텔·도시형', icon: '🏬', kinds: ['URBTY'], desc: '오피스텔·도시형생활주택·생활형숙박시설. 청약통장 없이 추첨으로 뽑습니다.' },
   { key: 'publicrent', label: '공공지원 민간임대', icon: '🤝', kinds: ['RENT'], desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
-  { key: 'lhsale', label: 'LH 분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE'], desc: 'LH 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
-  { key: 'lhrent', label: 'LH 임대주택', icon: '🏠', kinds: ['LH_RENT'], desc: '행복주택·국민임대·영구임대·매입임대·전세임대. 소득·자산 기준으로 뽑습니다.' },
+  { key: 'lhsale', label: '공공분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE', 'MYHOME_SALE'], desc: 'LH·SH·지방공사가 공급하는 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
+  { key: 'lhrent', label: '공공임대주택', icon: '🏠', kinds: ['LH_RENT', 'MYHOME_RENT'], desc: '행복주택·국민임대·영구임대·통합공공임대·매입/전세임대. 소득·자산 기준으로 뽑고, 부모님이 60세 이상이어도 유주택으로 봅니다.' },
   { key: 'welfare', label: '주거복지', icon: '💚', kinds: ['LH_WELFARE'], desc: '주거취약계층·고령자 등 대상 주거지원 공고.' },
 ];
 let CORNERS = DEFAULT_CORNERS;
@@ -61,6 +63,52 @@ const STATUSES = [
   { key: 'done', label: '종료' },
 ];
 
+// ── 날짜에서 기간 뽑기 ───────────────────────────────────────────────
+const yearsBetween = (from, to = new Date()) => {
+  if (!from) return null;
+  const a = new Date(from);
+  if (Number.isNaN(+a)) return null;
+  const months = (to.getFullYear() - a.getFullYear()) * 12 + (to.getMonth() - a.getMonth()) - (to.getDate() < a.getDate() ? 1 : 0);
+  return Math.max(0, months / 12);
+};
+
+/**
+ * 무주택 기간 기산일 — 주택공급규칙 기준.
+ *  · 기본은 신청자가 만 30세가 되는 날
+ *  · 30세 전에 혼인했다면 혼인신고일
+ *  · 본인·배우자가 집을 소유한 적이 있으면 무주택이 된 날부터 다시
+ * 만 60세 이상 직계존속의 주택은 없는 것으로 보므로 여기에 영향을 주지 않는다
+ * (단 노부모부양 특별공급과 공공임대는 예외 — 화면 도움말에 적어 뒀다).
+ */
+export function noHouseStart(p) {
+  if (!p.birthYm) return null;
+  const b = new Date(`${p.birthYm}-01`);
+  if (Number.isNaN(+b)) return null;
+  let start = new Date(b.getFullYear() + 30, b.getMonth(), 1);
+  if (p.marriageDate) {
+    const m = new Date(p.marriageDate);
+    if (!Number.isNaN(+m) && m < start) start = m;
+  }
+  if (p.noHouseSince) {
+    const h = new Date(p.noHouseSince);
+    if (!Number.isNaN(+h) && h > start) start = h;
+  }
+  return start;
+}
+
+/** 아직 만 30세가 안 됐으면 무주택 기간은 0 */
+export function noHouseYearsOf(p) {
+  const start = noHouseStart(p);
+  if (!start) return p.noHouseYears ?? 0;          // 예전 형식(년수 직접 입력) 호환
+  if (start > new Date()) return 0;
+  return yearsBetween(start) ?? 0;
+}
+
+export function accountYearsOf(p) {
+  if (!p.accountYm) return p.accountYears ?? 0;    // 예전 형식 호환
+  return yearsBetween(`${p.accountYm}-01`) ?? 0;
+}
+
 // ── 청약 가점 계산 (주택공급규칙 별표1) ───────────────────────────────
 function noHouseScore(y) { if (!y || y < 1) return 2; return Math.min(32, 2 + Math.floor(y) * 2); }
 function accountScore(y) {
@@ -69,7 +117,7 @@ function accountScore(y) {
   return Math.min(17, 3 + (Math.floor(y) - 1));
 }
 function familyScore(n) { return Math.min(35, 5 + (Number(n) || 0) * 5); }
-function totalScore(p) { return noHouseScore(p.noHouseYears) + accountScore(p.accountYears) + familyScore(p.family); }
+function totalScore(p) { return noHouseScore(noHouseYearsOf(p)) + accountScore(accountYearsOf(p)) + familyScore(p.family); }
 
 // ── 상태 판정 ────────────────────────────────────────────────────────
 function windows(l) {
@@ -94,7 +142,7 @@ function statusOf(l) {
 
 // ── 프로필 ───────────────────────────────────────────────────────────
 const DEFAULT_PROFILE = {
-  noHouseYears: 0, accountYears: 0, family: 0,
+  birthYm: '', marriageDate: '', noHouseSince: '', accountYm: '', family: 0,
   budgetEok: 9, areaMin: 49, areaMax: 99,
   special: [], gu: [], seoulResident: true,
 };
@@ -237,11 +285,13 @@ function cutlineFor(l) {
 // ── 렌더링 ───────────────────────────────────────────────────────────
 function renderMeCard() {
   const s = totalScore(profile);
+  const nh = noHouseYearsOf(profile), ac = accountYearsOf(profile);
+  const yr = (v) => `${Math.floor(v)}년${Math.round((v % 1) * 12) ? ` ${Math.round((v % 1) * 12)}개월` : ''}`;
   $('#meCard').innerHTML = `
     <div class="big">${s}<span style="font-size:13px;color:var(--text-3)"> / 84점</span></div>
-    <div class="sub">내 청약 가점</div>
-    <div class="row"><span>무주택 ${profile.noHouseYears}년</span><b>${noHouseScore(profile.noHouseYears)}점</b></div>
-    <div class="row"><span>통장 ${profile.accountYears}년</span><b>${accountScore(profile.accountYears)}점</b></div>
+    <div class="sub">내 청약 가점${profile.birthYm ? '' : ' · 조건 미입력'}</div>
+    <div class="row"><span>무주택 ${yr(nh)}</span><b>${noHouseScore(nh)}점</b></div>
+    <div class="row"><span>통장 ${yr(ac)}</span><b>${accountScore(ac)}점</b></div>
     <div class="row"><span>부양가족 ${profile.family}명</span><b>${familyScore(profile.family)}점</b></div>
     <div class="row" style="margin-top:8px;border-top:1px solid var(--line-soft);padding-top:8px">
       <span>예산</span><b>${profile.budgetEok}억</b></div>
@@ -498,8 +548,10 @@ function drawerHTML(l, a) {
 
 // ── 프로필 모달 ──────────────────────────────────────────────────────
 function openProfile() {
-  $('#pNoHouse').value = profile.noHouseYears;
-  $('#pAccount').value = profile.accountYears;
+  $('#pBirth').value = profile.birthYm || '';
+  $('#pMarriage').value = profile.marriageDate || '';
+  $('#pNoHouseSince').value = profile.noHouseSince || '';
+  $('#pAccountYm').value = profile.accountYm || '';
   $('#pFamily').value = profile.family;
   $('#pBudget').value = profile.budgetEok;
   $('#pAreaMin').value = profile.areaMin;
@@ -516,13 +568,29 @@ function renderProfileChips() {
   chipRow($('#pGu'), SEOUL_GU.map((g) => ({ key: g, label: g })), profile.gu, (k) => { toggle(profile.gu, k); renderProfileChips(); });
 }
 
-function updateScoreOut() {
-  const p = {
-    noHouseYears: +$('#pNoHouse').value || 0,
-    accountYears: +$('#pAccount').value || 0,
+function formFromModal() {
+  return {
+    birthYm: $('#pBirth').value,
+    marriageDate: $('#pMarriage').value,
+    noHouseSince: $('#pNoHouseSince').value,
+    accountYm: $('#pAccountYm').value,
     family: +$('#pFamily').value || 0,
   };
-  $('#scoreOut').innerHTML = `총 <b>${totalScore(p)}점</b> &nbsp;·&nbsp; 무주택 ${noHouseScore(p.noHouseYears)} + 통장 ${accountScore(p.accountYears)} + 부양가족 ${familyScore(p.family)}`;
+}
+
+function updateScoreOut() {
+  const p = formFromModal();
+  const nh = noHouseYearsOf(p), ac = accountYearsOf(p);
+  const start = noHouseStart(p);
+  const yr = (v) => `${Math.floor(v)}년 ${Math.round((v % 1) * 12)}개월`;
+  const note = !p.birthYm
+    ? '생년월을 넣으면 무주택 기간이 자동으로 계산됩니다.'
+    : start > new Date()
+      ? `만 30세(${start.getFullYear()}.${String(start.getMonth() + 1).padStart(2, '0')})가 되면 무주택 기간이 쌓이기 시작합니다.`
+      : `무주택 기산일 ${localISO(start)} · ${yr(nh)}${p.accountYm ? ` / 통장 ${yr(ac)}` : ''}`;
+  $('#scoreOut').innerHTML =
+    `총 <b>${totalScore(p)}점</b> &nbsp;·&nbsp; 무주택 ${noHouseScore(nh)} + 통장 ${accountScore(ac)} + 부양가족 ${familyScore(p.family)}
+     <span class="sub">${esc(note)}</span>`;
 }
 
 // ── 데이터 로드 ──────────────────────────────────────────────────────
@@ -551,6 +619,8 @@ async function load(refresh = false) {
   const auto = STATIC ? ' · 30분마다 자동 재빌드' : (data.autoRefreshMinutes ? ` · ${data.autoRefreshMinutes}분마다 자동 갱신` : '');
   $('#status').textContent = `서울 공고 ${listings.length}건 · ${t.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })} 기준${auto}`;
 
+  renderSources(data.sources);
+
   const banner = $('#banner');
   const notes = [...(data.errors || [])];
   if (data.enriching) notes.push(`상세 정보(분양가·경쟁률) 수집 중 ${data.progress.done}/${data.progress.total} — 잠시 후 자동 갱신됩니다.`);
@@ -570,6 +640,28 @@ function schedulePoll(ms) {
 }
 // 탭으로 돌아오면 즉시 한 번 맞춘다
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
+
+function renderSources(sources) {
+  const box = $('#sources');
+  if (!Array.isArray(sources) || !sources.length) { box.hidden = true; return; }
+  box.hidden = false;
+  const off = sources.filter((s) => !s.ok).length;
+  box.querySelector('summary').textContent = off
+    ? `데이터 연결 상태 — ${sources.length}개 중 ${off}개 미연결 (활용신청 필요)`
+    : `데이터 연결 상태 — ${sources.length}개 모두 연결됨`;
+  if (off) box.open = true;
+
+  $('#sourceList').innerHTML = sources.map((s) => `
+    <div class="source${s.ok ? '' : ' off'}">
+      <span class="dot">${s.ok ? '🟢' : '🟡'}</span>
+      <div>
+        <div class="nm">${esc(s.name)}</div>
+        <div class="use">${esc(s.use)}</div>
+        <div class="org">${esc(s.org)}${s.required ? ' · 필수' : ''}</div>
+      </div>
+      <a href="${esc(s.url)}" target="_blank" rel="noopener">${s.ok ? '문서 ↗' : '활용신청 ↗'}</a>
+    </div>`).join('');
+}
 
 function renderAll() { renderMeCard(); renderCorners(); renderFilters(); renderCards(); }
 
@@ -600,14 +692,14 @@ $('#fReset').onclick = () => {
   renderAll();
 };
 
-for (const id of ['pNoHouse', 'pAccount', 'pFamily']) $('#' + id).addEventListener('input', updateScoreOut);
+for (const id of ['pBirth', 'pMarriage', 'pNoHouseSince', 'pAccountYm', 'pFamily']) {
+  $('#' + id).addEventListener('input', updateScoreOut);
+}
 
 $('#pSave').onclick = () => {
   profile = {
     ...profile,
-    noHouseYears: +$('#pNoHouse').value || 0,
-    accountYears: +$('#pAccount').value || 0,
-    family: +$('#pFamily').value || 0,
+    ...formFromModal(),
     budgetEok: +$('#pBudget').value || 0,
     areaMin: +$('#pAreaMin').value || 0,
     areaMax: +$('#pAreaMax').value || 999,
