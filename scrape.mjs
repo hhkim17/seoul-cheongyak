@@ -33,7 +33,7 @@ const shType = (t) => SH_TYPES.find((k) => t.includes(k)) || 'SH 공고';
 export async function scrapeSh({ pages = 2 } = {}) {
   const out = [];
   for (let page = 1; page <= pages; page++) {
-    const html = await get(`${SH_LIST}?rowPerPage=50&currentPage=${page}`);
+    const html = await get(`${SH_LIST}?page=${page}`);   // 이 게시판의 페이징 파라미터는 page
     const trs = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => m[1]);
     for (const tr of trs) {
       const seq = tr.match(/getDetailView\('(\d+)'\)/)?.[1];
