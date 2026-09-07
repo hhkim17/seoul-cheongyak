@@ -41,6 +41,7 @@
     </div>
     <div class="topbar-actions">
       <button id="btnProfile" class="ghost">내 조건 설정</button>
+      <button id="btnMail" class="ghost">메일 알림</button>
       <button id="btnRefresh" class="ghost" title="청약홈에서 다시 가져오기">새로고침</button>
       <a id="repoLink" class="ghost btnlike" href="https://github.com/hhkim17/seoul-cheongyak" target="_blank" rel="noopener">소스</a>
     </div>
@@ -97,6 +98,49 @@
 <div id="drawer" class="drawer" hidden>
   <div class="drawer-scrim" data-close></div>
   <div class="drawer-panel" id="drawerPanel"></div>
+</div>
+
+<!-- 메일 알림 설정 -->
+<div id="mailModal" class="modal" hidden>
+  <div class="modal-scrim" data-close></div>
+  <div class="modal-panel">
+    <h2>메일 알림 설정</h2>
+    <p class="lead small">새 공고가 올라오면 조건에 맞는 것만 메일로 보냅니다. 「당첨자 발표」·「안내」는 빼고 <b>모집공고만</b> 보냅니다.</p>
+
+    <fieldset>
+      <legend>받을 코너</legend>
+      <div id="mCorners" class="chips"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>조건</legend>
+      <div class="grid3">
+        <label class="field"><span>최대 분양가 (억)</span><input id="mPrice" type="number" min="0" step="0.5"></label>
+        <label class="field"><span>최대 보증금 (억)</span><input id="mDeposit" type="number" min="0" step="0.5"></label>
+        <label class="field"><span>전용 최소~최대 (㎡)</span>
+          <span style="display:flex;gap:6px"><input id="mAreaMin" type="number" min="0"><input id="mAreaMax" type="number" min="0"></span>
+        </label>
+      </div>
+      <label class="toggle" style="margin-top:12px"><input type="checkbox" id="mUnpriced"> 금액 정보가 없는 공고도 받기</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>관심 자치구 <span class="hint">(비워두면 서울 전체)</span></legend>
+      <div id="mGu" class="chips scroll"></div>
+    </fieldset>
+
+    <p id="mailMsg" class="msg"></p>
+    <details class="help" id="mailManual" hidden>
+      <summary>이 내용을 <code>watch.json</code>에 넣으세요 (사이트에서는 저장이 안 됩니다)</summary>
+      <pre id="mailJson" style="background:var(--bg-3);padding:12px;border-radius:8px;overflow-x:auto;font-size:11.5px"></pre>
+      <button id="mailCopy" class="ghost small">복사</button>
+    </details>
+
+    <div class="modal-actions">
+      <button id="mSave" class="primary">저장</button>
+      <button class="ghost" data-close>닫기</button>
+    </div>
+  </div>
 </div>
 
 <!-- 내 조건 -->
