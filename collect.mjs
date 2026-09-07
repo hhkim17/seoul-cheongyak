@@ -136,7 +136,18 @@ export async function collectListings(key) {
 
   const seen = new Map();
   for (const l of all) if (!seen.has(l.id)) seen.set(l.id, l);
-  const listings = [...seen.values()]
+
+  // 정정공고가 원공고와 함께 내려오는 경우가 있다 — 같은 공고면 최신 것만 남긴다
+  const titleKey = (l) =>
+    `${l.kind}|${String(l.name).replace(/\[?\s*정정\s*공고\s*\]?/g, '').replace(/\s+/g, '')}`;
+  const byTitle = new Map();
+  for (const l of seen.values()) {
+    const k = titleKey(l);
+    const prev = byTitle.get(k);
+    if (!prev || (l.noticeDate || '') > (prev.noticeDate || '')) byTitle.set(k, l);
+  }
+
+  const listings = [...byTitle.values()]
     .map((l) => ({ ...l, corner: N.cornerOf(l.kind) }))
     .sort((a, b) => (b.noticeDate || '').localeCompare(a.noticeDate || ''));
 

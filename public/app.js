@@ -338,6 +338,7 @@ function renderFilters() {
   $('#fSort').value = filters.sort;
   $('#fBudget').checked = filters.budgetOnly;
   $('#fEligible').checked = filters.eligibleOnly;
+  $('#fAnnounce').checked = filters.showAnnouncements;
 }
 const toggle = (arr, k) => { const i = arr.indexOf(k); i < 0 ? arr.push(k) : arr.splice(i, 1); };
 
@@ -887,6 +888,7 @@ $('#mailCopy').onclick = () => navigator.clipboard?.writeText($('#mailJson').tex
 $('#fSort').onchange = (e) => { filters.sort = e.target.value; renderCards(); };
 $('#fBudget').onchange = (e) => { filters.budgetOnly = e.target.checked; renderCards(); };
 $('#fEligible').onchange = (e) => { filters.eligibleOnly = e.target.checked; renderCards(); };
+$('#fAnnounce').onchange = (e) => { filters.showAnnouncements = e.target.checked; renderAll(); };
 $('#fReset').onclick = () => {
   filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false };
   renderAll();
