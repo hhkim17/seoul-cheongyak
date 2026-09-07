@@ -205,10 +205,10 @@ export const CORNERS = [
     desc: '오피스텔·도시형생활주택·생활형숙박시설. 청약통장 없이 추첨으로 뽑습니다.' },
   { key: 'publicrent', label: '공공지원 민간임대',  icon: '🤝', kinds: ['RENT'],
     desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
-  { key: 'lhsale',     label: 'LH 분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE'],
-    desc: 'LH 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
-  { key: 'lhrent',     label: 'LH 임대주택',        icon: '🏠', kinds: ['LH_RENT'],
-    desc: '행복주택·국민임대·영구임대·매입임대·전세임대. 소득·자산 기준으로 뽑습니다.' },
+  { key: 'lhsale',     label: '공공분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE', 'MYHOME_SALE'],
+    desc: 'LH·SH·지방공사가 공급하는 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
+  { key: 'lhrent',     label: '공공임대주택',       icon: '🏠', kinds: ['LH_RENT', 'MYHOME_RENT'],
+    desc: '행복주택·국민임대·영구임대·통합공공임대·매입/전세임대. 소득·자산 기준으로 뽑고, 부모님이 60세 이상이어도 유주택으로 봅니다.' },
   { key: 'welfare',    label: '주거복지',           icon: '💚', kinds: ['LH_WELFARE'],
     desc: '주거취약계층·고령자 등 대상 주거지원 공고.' },
 ];
@@ -305,3 +305,50 @@ export function extractAttachments(node, out = []) {
   const seen = new Set();
   return out.filter((a) => (seen.has(a.url) ? false : seen.add(a.url)));
 }
+
+// ── 마이홈포털 통합 공고 정규화 ──────────────────────────────────────
+// 필드명이 문서와 실제가 다를 수 있어 후보 키를 넓게 본다.
+const RENT_HINT = /임대|행복|국민|영구|매입|전세/;
+
+export function normalizeMyhome(r, kindHint) {
+  const name = pick(r, 'pblancNm', 'rcritNtcNm', 'houseNm', 'sujiNm', 'ntcNm', 'pblancTitle', 'title');
+  const inst = pick(r, 'suplyInstNm', 'instNm', 'operInstNm', 'bsnsMbyNm', 'insttNm');
+  const region = pick(r, 'brtcNm', 'ctprvnNm', 'sidoNm');
+  const sgg = pick(r, 'signguNm', 'sggNm');
+  const addr = pick(r, 'rnAdres', 'lcAdres', 'adres', 'hshldAdres') || [region, sgg].filter(Boolean).join(' ');
+  const type = pick(r, 'houseTyNm', 'suplyTyNm', 'rnkNm', 'aisTpCdNm', 'pblancTyNm');
+  const url = pick(r, 'dtlUrl', 'pblancUrl', 'ntcUrl', 'url', 'detailUrl');
+  const id = pick(r, 'pblancId', 'rcritNtcId', 'panId', 'ntcId', 'pblancNo') || `${name}|${pick(r, 'pblancBeginDe', 'rcritPblancDe')}`;
+  const kind = kindHint || (RENT_HINT.test(`${type}${name}`) ? 'MYHOME_RENT' : 'MYHOME_SALE');
+
+  const notice = toISO(pick(r, 'pblancBeginDe', 'rcritPblancDe', 'pblancDe', 'ntcDe'));
+  const start = toISO(pick(r, 'rceptBeginDe', 'sbscrptRceptBgnde', 'rcritBeginDe')) || notice;
+  const end = toISO(pick(r, 'rceptEndDe', 'sbscrptRceptEndde', 'rcritEndDe', 'pblancEndDe'));
+
+  return {
+    kind,
+    kindLabel: type || (kind === 'MYHOME_RENT' ? '공공임대' : '공공분양'),
+    source: 'MYHOME',
+    houseManageNo: id, pblancNo: id, id: `${kind}:${id}`,
+    name: name || '(공고명 없음)',
+    areaName: region || '서울',
+    address: addr,
+    gu: guFromAddress(addr) || guFromAddress(name),
+    totalUnits: n(pick(r, 'suplyHshldco', 'totSuplyHshldco', 'hshldCo')),
+    noticeDate: notice,
+    receiptStart: start, receiptEnd: end,
+    rank1Start: start, rank1End: end,
+    resultDate: toISO(pick(r, 'przwnerPresnatnDe', 'przwnerDe')),
+    contractStart: null, contractEnd: null, moveIn: pick(r, 'mvnPrearngeYm'),
+    developer: inst || '공공주택사업자', builder: '',
+    tel: pick(r, 'telno', 'cntcTelno', 'mdhsTelno'),
+    homepage: '', noticeUrl: url,
+    subType: type,
+    attachments: [],
+    models: [], cmpet: null, score: null,
+    flags: {},
+  };
+}
+
+/** 어느 필드든 '서울'이 들어 있으면 서울 공고로 본다 */
+export const myhomeIsSeoul = (r) => /서울/.test(JSON.stringify(r));
