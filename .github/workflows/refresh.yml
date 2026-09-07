@@ -52,30 +52,21 @@ jobs:
         run: node build.mjs
 
       - name: 내 조건에 맞는 새 공고 골라내기
-        id: notify
-        run: |
-          node notify.mjs /tmp/prev.json ${{ inputs.test_email && '--test' || '' }}
-          if [ -f notify/email.html ]; then
-            echo "send=true" >> "$GITHUB_OUTPUT"
-            echo "subject=$(cat notify/subject.txt)" >> "$GITHUB_OUTPUT"
-          else
-            echo "send=false" >> "$GITHUB_OUTPUT"
-          fi
+        env:
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node notify.mjs /tmp/prev.json ${{ inputs.test_email && '--test' || '' }}
 
       - name: 이메일 발송
-        if: steps.notify.outputs.send == 'true' && env.MAIL_USERNAME != ''
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          from: 서울 청약 대시보드 <${{ secrets.MAIL_USERNAME }}>
-          to: ${{ secrets.MAIL_TO || secrets.MAIL_USERNAME }}
-          subject: ${{ steps.notify.outputs.subject }}
-          html_body: file://notify/email.html
-          convert_markdown: false
+        if: env.MAIL_USERNAME != ''
+        env:
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+        run: |
+          npm install --no-save --silent nodemailer
+          node send.mjs
 
       - name: 변경분 커밋
         run: |
