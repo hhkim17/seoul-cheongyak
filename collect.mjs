@@ -3,6 +3,7 @@
 import { api } from './api.mjs';
 import * as LH from './lh.mjs';
 import { myhome } from './myhome.mjs';
+import { isTransient } from './net.mjs';
 import { scrapeSh, scrapeHug } from './scrape.mjs';
 import * as N from './normalize.mjs';
 import { cacheGet, cacheSet } from './store.mjs';
@@ -61,7 +62,9 @@ async function lhSection(key) {
       blocked,
       error: blocked
         ? 'LH 임대·분양(행복주택·국민임대 등)은 아직 안 나옵니다 — 공공데이터포털에서 “한국토지주택공사_분양임대공고문 조회 서비스” 활용신청이 필요합니다.'
-        : `LH 조회 실패: ${e.message}`,
+        : isTransient(e)
+          ? 'LH 공고를 이번에는 못 가져왔습니다 (공공데이터포털 접속 불안정). 다음 갱신 때 자동으로 다시 시도합니다.'
+          : `LH 조회 실패: ${e.message}`,
     };
   }
 }
@@ -87,7 +90,9 @@ async function myhomeSection(key) {
       blocked,
       error: blocked
         ? 'SH·지방공사 공고(공공임대·공공분양)는 아직 안 나옵니다 — 공공데이터포털에서 “국토교통부_마이홈포털 공공주택 모집공고 조회 서비스” 활용신청이 필요합니다.'
-        : `마이홈포털 조회 실패: ${e.message}`,
+        : isTransient(e)
+          ? '마이홈포털 공고를 이번에는 못 가져왔습니다 (공공데이터포털 접속 불안정). 다음 갱신 때 자동으로 다시 시도합니다.'
+          : `마이홈포털 조회 실패: ${e.message}`,
     };
   }
 }
