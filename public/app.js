@@ -63,7 +63,12 @@ let CORNERS = DEFAULT_CORNERS;
 let STD = null;   // { urban: {year, base}, median: {year, base} }
 
 /** 가구원수 = 부양가족 + 본인 */
-const householdSize = () => Math.max(1, (Number(profile.family) || 0) + 1);
+/**
+ * 소득 기준에 쓰는 가구원수는 등본상 세대원 수다.
+ * 청약 가점의 '부양가족 수'와 다르다 — 부모님과 사는 미혼 청년은
+ * 부양가족 0명이지만 세대원은 3명이다. 따로 받되, 없으면 갈음한다.
+ */
+const householdSize = () => Math.max(1, Number(profile.householdCount) || (Number(profile.family) || 0) + 1);
 const myAgeYears = () => (profile.birthYm ? Math.floor(yearsBetween(`${profile.birthYm}-01`) ?? 0) : null);
 
 // 임대 공고는 분양가가 아니라 보증금·월세로 읽어야 한다
@@ -181,7 +186,7 @@ function statusOf(l) {
 
 // ── 프로필 ───────────────────────────────────────────────────────────
 const DEFAULT_PROFILE = {
-  birthYm: '', marriageDate: '', noHouseSince: '', accountYm: '', family: 0,
+  birthYm: '', marriageDate: '', noHouseSince: '', accountYm: '', family: 0, householdCount: null,
   incomeManwon: null, soloIncomeManwon: null, assetManwon: null, soloAssetManwon: null,
   realEstateManwon: null, carManwon: null, dualIncome: false,
   budgetEok: 9, areaMin: 49, areaMax: 99,
@@ -272,7 +277,7 @@ function analyze(l) {
     if (cut != null) {
       const margin = myScore - cut;
       score += Math.max(0, Math.min(25, 12 + margin * 1.5));
-      reasons.push({ t: `내 가점 ${myScore} vs 유사 커트라인 ${cut}`, neg: margin < 0 });
+      reasons.push({ t: `내 가점 ${myScore} vs ${profile.seoulResident ? '해당지역' : '기타지역'} 커트라인 ${cut}`, neg: margin < 0 });
     } else {
       score += 10;
       reasons.push({ t: `내 가점 ${myScore}점` });
@@ -331,7 +336,9 @@ function buildCutlines() {
     for (const r of l.score || []) {
       const v = parseFloat(r.LWET_SCORE);
       if (!Number.isFinite(v) || v <= 0) continue;
-      if (r.RESIDE_SECD && r.RESIDE_SECD !== '01') continue;
+      // 서울 거주자는 해당지역(01), 그 외는 기타지역(02·03) 커트라인과 견준다
+      const want = profile.seoulResident ? '01' : '02';
+      if (r.RESIDE_SECD && r.RESIDE_SECD !== want) continue;
       all.push(v);
       if (l.gu) (byGu[l.gu] ||= []).push(v);
     }
@@ -720,6 +727,7 @@ function openProfile() {
   $('#pNoHouseSince').value = profile.noHouseSince || '';
   $('#pAccountYm').value = profile.accountYm || '';
   $('#pFamily').value = profile.family;
+  $('#pHousehold').value = profile.householdCount ?? '';
   $('#pIncome').value = profile.incomeManwon ?? '';
   $('#pSolo').value = profile.soloIncomeManwon ?? '';
   $('#pSoloAsset').value = profile.soloAssetManwon ?? '';
@@ -750,6 +758,7 @@ function formFromModal() {
     noHouseSince: $('#pNoHouseSince').value,
     accountYm: $('#pAccountYm').value,
     family: +$('#pFamily').value || 0,
+    householdCount: $('#pHousehold').value === '' ? null : Number($('#pHousehold').value),
   };
 }
 
@@ -757,7 +766,7 @@ function updateIncomeOut() {
   const box = $('#incomeOut');
   if (!STD?.urban?.base) { box.textContent = '소득 기준표를 아직 불러오지 못했습니다.'; return; }
   const num = (id) => (($('#' + id).value === '') ? null : Number($('#' + id).value));
-  const size = Math.max(1, (Number($('#pFamily').value) || 0) + 1);
+  const size = Math.max(1, Number($('#pHousehold').value) || (Number($('#pFamily').value) || 0) + 1);
   const u = STD.urban.base, m = STD.median?.base;
   const uBase = u[Math.min(size, Math.max(...Object.keys(u).map(Number)))];
   const tier = Std.guessTier({ ageYears: myAgeYears(), special: profile.special });
@@ -1087,7 +1096,7 @@ $('#fReset').onclick = () => {
 for (const id of ['pBirth', 'pMarriage', 'pNoHouseSince', 'pAccountYm', 'pFamily']) {
   $('#' + id).addEventListener('input', updateScoreOut);
 }
-for (const id of ['pIncome', 'pSolo', 'pFamily', 'pBirth', 'pDual']) {
+for (const id of ['pIncome', 'pSolo', 'pFamily', 'pHousehold', 'pBirth', 'pDual']) {
   $('#' + id).addEventListener('input', updateIncomeOut);
 }
 
@@ -1107,6 +1116,7 @@ $('#pSave').onclick = () => {
     areaMax: +$('#pAreaMax').value || 999,
     seoulResident: $('#pSeoulResident').checked,
   };
+  cutlineCache = null;   // 거주지 기준이 바뀌면 커트라인도 다시 잡는다
   saveProfile();
   schedulePush();
   $('#profileModal').hidden = true;
