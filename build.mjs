@@ -74,6 +74,7 @@ const snapshot = {
   lhBlocked: data.lhBlocked,
   cmpetBlocked: state.cmpetBlocked,
   corners: CORNERS,
+  incomeStandard: data.incomeStandard,
   sources: sourceStatus(data),
   listings: data.listings,
 };

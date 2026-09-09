@@ -4,7 +4,7 @@ import { api } from './api.mjs';
 import * as LH from './lh.mjs';
 import { myhome } from './myhome.mjs';
 import { isTransient } from './net.mjs';
-import { scrapeSh, scrapeHug } from './scrape.mjs';
+import { scrapeSh, scrapeHug, scrapeIncomeStandard } from './scrape.mjs';
 import * as N from './normalize.mjs';
 import { cacheGet, cacheSet } from './store.mjs';
 
@@ -135,6 +135,15 @@ export async function collectListings(key) {
     scrapeSection(),
   ]);
 
+  // 소득 기준표는 매년 바뀐다 — 코드에 박지 않고 공표 페이지에서 읽어 스냅샷에 싣는다
+  let incomeStandard = null;
+  try {
+    incomeStandard = await scrapeIncomeStandard();
+    log(`  소득 기준표: ${incomeStandard.year}년 (${Object.keys(incomeStandard.base).length}개 가구원수)`);
+  } catch (e) {
+    log(`  소득 기준표: 실패 — ${e.message}`);
+  }
+
   const parts = [apt, remndr, urbty, rent, lh, mh, scraped];
   const all = parts.flatMap((r) => r.rows);
   const errors = parts.map((r) => r.error).filter(Boolean);
@@ -157,7 +166,7 @@ export async function collectListings(key) {
     .sort((a, b) => (b.noticeDate || '').localeCompare(a.noticeDate || ''));
 
   log(`수집 완료: 서울 ${listings.length}건`);
-  return { listings, errors, lhBlocked: lh.blocked, myhomeBlocked: mh.blocked, scrapeOk: scraped.ok, fetchedAt: Date.now() };
+  return { listings, errors, lhBlocked: lh.blocked, myhomeBlocked: mh.blocked, scrapeOk: scraped.ok, incomeStandard, fetchedAt: Date.now() };
 }
 
 // ── 단지별 상세 보강 ────────────────────────────────────────────────

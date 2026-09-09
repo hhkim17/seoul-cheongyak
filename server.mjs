@@ -141,6 +141,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, {
         fetchedAt: data.fetchedAt, autoRefreshMinutes: AUTO_REFRESH_MS / 60000,
         corners: CORNERS,
+        incomeStandard: data.incomeStandard,
         watch: JSON.parse(fs.readFileSync(WATCH, 'utf8')),
         sources: sourceStatus(data),
         errors, enriching, progress: enrichProgress, listings: data.listings,
