@@ -240,7 +240,7 @@
         </div>
       </div>
       <div class="grid3" style="margin-top:10px">
-        <label class="field"><span>자동차가액 (만원)</span><input id="pCar" type="number" min="0" step="100" placeholder="없으면 0"></label>
+        <label class="field"><span>자동차가액 (만원) <span class="hint">가장 비싼 차 1대</span></span><input id="pCar" type="number" min="0" step="100" placeholder="없으면 0"></label>
         <label class="field"><span>부동산 가액 (만원) <span class="hint">선택</span></span><input id="pRealEstate" type="number" min="0" step="100" placeholder="공공분양 판정용"></label>
         <label class="toggle" style="align-self:end;padding-bottom:9px"><input type="checkbox" id="pDual"> 맞벌이 <span class="hint">신혼부부</span></label>
       </div>
@@ -250,9 +250,9 @@
       <details class="help">
         <summary>유형별 기준 (2026년 · 기관 공식 안내에서 확인한 값)</summary>
         <div class="tablewrap"><table>
-          <thead><tr><th>유형</th><th>소득 기준</th><th>총자산</th><th>자동차</th></tr></thead>
+          <thead><tr><th>유형</th><th>소득 기준</th><th>총자산 (만원)</th><th>자동차 (만원)<br><span class="hint">1대 기준</span></th></tr></thead>
           <tbody>
-            <tr><td>행복주택</td><td>도시근로자 100%<br><span class="hint">1인 120 · 2인 110 · 맞벌이신혼 120</span></td><td>3억 4,500<br><span class="hint">청년 2억 5,100 · 대학생 1억 800</span></td><td>4,542</td></tr>
+            <tr><td>행복주택</td><td>도시근로자 100%<br><span class="hint">1인 120 · 2인 110 · 맞벌이신혼 120</span></td><td>3억 4,500<br><span class="hint">청년 2억 5,100 · 대학생 1억 800</span></td><td>4,542<br><span class="hint">대학생은 소유 불가</span></td></tr>
             <tr><td>국민임대</td><td>도시근로자 70%<br><span class="hint">1인 90 · 2인 80</span></td><td>3억 4,500</td><td>4,542</td></tr>
             <tr><td>통합공공임대</td><td><b>기준 중위소득</b> 150%<br><span class="hint">우선공급 100% · 1인 +20%p · 2인 +10%p</span></td><td>3억 4,500</td><td>4,542</td></tr>
             <tr><td>청년안심주택</td><td>도시근로자 120%</td><td><b>본인</b> 2억 5,100</td><td>4,542</td></tr>
@@ -277,7 +277,11 @@
           <li><b>부동산</b> — <a href="https://www.realtyprice.kr" target="_blank" rel="noopener">부동산공시가격 알리미</a>.
             시세가 아니라 <b>공시가격</b> 기준입니다.</li>
           <li><b>자동차</b> — <a href="https://www.kidi.or.kr" target="_blank" rel="noopener">보험개발원</a> 차량기준가액.
-            중고차 시세가 아니라 <b>보건복지부가 정한 기준가액</b>입니다.</li>
+            중고차 시세가 아니라 <b>보건복지부가 정한 기준가액</b>입니다.
+            <b>한도(4,542만원)는 세대 합산이 아니라 차 한 대씩 봅니다</b> —
+            LH 안내가 「신청자 및 세대원 <b>각각의</b> 자동차를 기준으로 하되, 동일 세대 내 지분 공유 차량은 지분을 합산」이라
+            적고 있습니다. 그래서 위 칸에는 <b>세대에서 가장 비싼 차 한 대</b>의 가액을 넣으면 됩니다.
+            다만 <b>총자산</b>을 구할 때는 세대가 보유한 <b>모든 차량 가액의 합계</b>를 더해야 합니다.</li>
           <li><b>한 번에 진단</b> — <a href="https://www.myhome.go.kr" target="_blank" rel="noopener">마이홈포털</a> 「주거복지 자가진단」.</li>
         </ul>
         <p><b>세대원 소득은 각자 본인만 조회할 수 있습니다.</b> 배우자 소득은 배우자가 직접 확인해 알려 줘야 합니다.

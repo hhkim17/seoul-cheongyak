@@ -34,6 +34,15 @@ export function ruleKeyOf(l) {
 }
 
 /**
+ * 자동차 한도는 세대 합산이 아니다.
+ * LH 안내: "신청자 및 세대원 각각의 자동차를 기준으로 하되, 해당 동일 세대내 세대원간
+ * 지분으로 공유하고 있는 자동차의 보유가액은 세대원간 지분을 합산하여 산정".
+ * 그래서 세대에서 가장 비싼 차 한 대가 한도를 넘는지로 본다.
+ * (반면 총자산을 구할 때는 세대가 보유한 모든 자동차의 가액 합계를 더한다.)
+ */
+export const CAR_RULE = '세대에서 가장 비싼 차 한 대 기준 (세대 합산이 아님)';
+
+/**
  * basis   — urban: 도시근로자 월평균소득 / median: 기준 중위소득 / none: 소득 기준 없음
  * income  — pct 기본 비율, bySize 가구원수 예외, dual 맞벌이 신혼 완화
  * soloTiers — 소득을 '본인 기준'으로 보는 계층
@@ -47,7 +56,7 @@ export const RULES = {
     assets: { 일반: 34500, 신혼부부: 34500, 고령자: 34500, 청년: 25100, 대학생: 10800 },
     soloAssetTiers: ['청년', '대학생'],
     car: 4542,
-    note: '청년 계층은 본인 소득만 봅니다. 대학생은 본인과 부모 소득을 합산합니다. 맞벌이 신혼부부는 120%까지 인정됩니다.',
+    note: '청년 계층은 본인 소득만 봅니다. 대학생은 본인과 부모 소득을 합산하고, 자동차는 아예 소유할 수 없습니다. 맞벌이 신혼부부는 120%까지 인정됩니다.',
   },
   national: {
     label: '국민임대', verified: true, basis: 'urban', source: SOURCES.national,
@@ -176,7 +185,12 @@ export function evaluate(listing, p, std) {
   if (rule.realEstate != null && p.realEstate != null && p.realEstate > rule.realEstate) {
     out.verdict = 'over'; out.assetOver = '부동산';
   }
+  // 자동차는 세대에서 가장 비싼 한 대로 본다 — 합산이 아니다
   if (rule.car != null && p.car != null && p.car > rule.car) { out.verdict = 'over'; out.assetOver = '자동차'; }
+  // 행복주택 대학생 계층은 자동차 산출대상 차량을 아예 소유하면 안 된다
+  if (key === 'happy' && p.tier === '대학생' && p.car != null && p.car > 0) {
+    out.verdict = 'over'; out.assetOver = '자동차(대학생은 소유 불가)';
+  }
   out.carLimit = rule.car ?? null;
 
   return out;
