@@ -69,15 +69,26 @@ const myAgeYears = () => (profile.birthYm ? Math.floor(yearsBetween(`${profile.b
 /** 이 공고에 대해 내 소득·자산이 어디쯤인지 */
 function incomeCheck(l) {
   if (!INCOME_STD || profile.incomeManwon == null) return { verdict: 'unknown' };
-  return Std.evaluate({
-    corner: cornerOf(l),
-    income: profile.incomeManwon * 10000,
-    household: householdSize(),
-    totalAssetManwon: profile.assetManwon,
-    carManwon: profile.carManwon,
-    tier: Std.guessTier({ ageYears: myAgeYears(), special: profile.special }),
-    base: INCOME_STD.base,
-  });
+  const corner = cornerOf(l);
+  const tier = Std.guessTier({ ageYears: myAgeYears(), special: profile.special });
+  const common = { corner, totalAssetManwon: profile.assetManwon, carManwon: profile.carManwon, tier, base: INCOME_STD.base };
+
+  const household = Std.evaluate({ ...common, income: profile.incomeManwon * 10000, household: householdSize() });
+
+  // 청년 계층은 본인 소득만 보는 유형이 있다 — 그 경우 1인가구 기준으로 따로 계산해 함께 보여준다
+  const age = myAgeYears();
+  const canSolo = Std.SOLO_INCOME_CORNERS.has(corner)
+    && profile.soloIncomeManwon != null
+    && age != null && age >= 19 && age <= 39;
+  const solo = canSolo
+    ? Std.evaluate({ ...common, income: profile.soloIncomeManwon * 10000, household: 1 })
+    : null;
+
+  // 청년 기준으로 통과하면 그쪽을 앞세운다 (더 유리한 신청 경로이므로)
+  if (solo && solo.verdict !== 'over' && household.verdict === 'over') {
+    return { ...solo, byYouth: true, householdVerdict: household };
+  }
+  return { ...household, solo };
 }
 
 // 임대 공고는 분양가가 아니라 보증금·월세로 읽어야 한다
@@ -177,7 +188,7 @@ function statusOf(l) {
 // ── 프로필 ───────────────────────────────────────────────────────────
 const DEFAULT_PROFILE = {
   birthYm: '', marriageDate: '', noHouseSince: '', accountYm: '', family: 0,
-  incomeManwon: null, assetManwon: null, carManwon: null,
+  incomeManwon: null, soloIncomeManwon: null, assetManwon: null, carManwon: null,
   budgetEok: 9, areaMin: 49, areaMax: 99,
   special: [], gu: [], seoulResident: true,
 };
@@ -512,8 +523,8 @@ function cardOf(l, a) {
       ${l.flags?.priceCap ? '<span class="badge">분양가상한제</span>' : ''}
       ${l.flags?.speculative ? '<span class="badge hot">투기과열</span>' : ''}
       ${a.cmpetAvg != null ? `<span class="badge ${a.cmpetAvg >= 20 ? 'hot' : ''}">경쟁률 ${a.cmpetAvg}:1</span>` : ''}
-      ${a.income?.verdict === 'ok' ? '<span class="verdict ok">소득 기준 이내</span>'
-        : a.income?.verdict === 'tight' ? '<span class="verdict tight">소득 기준 아슬아슬</span>'
+      ${a.income?.verdict === 'ok' ? `<span class="verdict ok">${a.income.byYouth ? '청년 기준 이내' : '소득 기준 이내'}</span>`
+        : a.income?.verdict === 'tight' ? `<span class="verdict tight">${a.income.byYouth ? '청년 기준 아슬아슬' : '소득 기준 아슬아슬'}</span>`
         : a.income?.verdict === 'over' ? `<span class="verdict over">${esc(a.income.assetOver ? a.income.assetOver + ' 초과' : '소득 기준 초과')}</span>` : ''}
     </div>
     <div class="kv">
@@ -643,6 +654,8 @@ function drawerHTML(l, a) {
       &nbsp; 내 소득 <b>${a.income.myPercent}%</b> · ${esc(a.income.rule ?? '')} 기준 <b>${a.income.thresholdPercent}%</b>
       ${a.income.thresholdWon ? `(월 ${a.income.thresholdWon.toLocaleString('ko-KR')}원)` : ''}
       ${a.income.assetOver ? `<br><b>${esc(a.income.assetOver)} 한도를 넘습니다.</b>` : ''}
+      ${a.income.byYouth ? `<br><span class="fineprint">세대 합산으로는 ${a.income.householdVerdict.myPercent}%로 기준을 넘지만, 청년 계층(본인 소득)으로 신청하면 들어옵니다.</span>` : ''}
+      ${a.income.solo && a.income.solo.verdict !== 'unknown' ? `<br><span class="fineprint">청년 계층(본인 소득) 기준으로는 ${a.income.solo.myPercent}% — ${a.income.solo.verdict === 'over' ? '초과' : '기준 이내'}</span>` : ''}
     </p>
     ${a.income.note ? `<p class="fineprint">${esc(a.income.note)}</p>` : ''}
     <p class="fineprint">${INCOME_STD?.year ?? ''}년 공표 기준으로 계산했습니다. 공고마다 우선공급 계층·면적별 예외가 있으니 최종 자격은 공고문을 확인하세요.
@@ -707,6 +720,7 @@ function openProfile() {
   $('#pAccountYm').value = profile.accountYm || '';
   $('#pFamily').value = profile.family;
   $('#pIncome').value = profile.incomeManwon ?? '';
+  $('#pSolo').value = profile.soloIncomeManwon ?? '';
   $('#pAsset').value = profile.assetManwon ?? '';
   $('#pCar').value = profile.carManwon ?? '';
   $('#pBudget').value = profile.budgetEok;
@@ -1058,7 +1072,7 @@ $('#fReset').onclick = () => {
 for (const id of ['pBirth', 'pMarriage', 'pNoHouseSince', 'pAccountYm', 'pFamily']) {
   $('#' + id).addEventListener('input', updateScoreOut);
 }
-for (const id of ['pIncome', 'pFamily', 'pBirth']) {
+for (const id of ['pIncome', 'pSolo', 'pFamily', 'pBirth']) {
   $('#' + id).addEventListener('input', updateIncomeOut);
 }
 
@@ -1067,6 +1081,7 @@ $('#pSave').onclick = () => {
     ...profile,
     ...formFromModal(),
     incomeManwon: $('#pIncome').value === '' ? null : Number($('#pIncome').value),
+    soloIncomeManwon: $('#pSolo').value === '' ? null : Number($('#pSolo').value),
     assetManwon: $('#pAsset').value === '' ? null : Number($('#pAsset').value),
     carManwon: $('#pCar').value === '' ? null : Number($('#pCar').value),
     budgetEok: +$('#pBudget').value || 0,

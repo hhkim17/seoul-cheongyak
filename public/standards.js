@@ -25,6 +25,13 @@ export const ASSET_LIMITS = {
  *  verified: LH·SH 공식 안내에서 직접 확인한 기준 — 판정에 쓴다
  *  ceiling : 확인하지 못한 유형의 '이보다 높으면 어디도 어렵다'는 상한 — 초과 경고에만 쓴다
  */
+/**
+ * 소득을 '본인 기준'으로 보는 계층이 있는 유형.
+ * LH 행복주택 안내가 청년 계층에만 '해당세대(세대원은 본인 기준)'이라 적고 있어
+ * 확인된 이 유형에만 적용한다. 청년안심주택 등은 공고마다 달라 넣지 않는다.
+ */
+export const SOLO_INCOME_CORNERS = new Set(['happy']);
+
 export const INCOME_RULES = {
   happy: {
     verified: true, label: '행복주택',
