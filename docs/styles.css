@@ -262,3 +262,11 @@ mark { background: color-mix(in srgb, var(--warn) 35%, transparent); color: inhe
   .verdict.over  { background: #fdeae8; color: #b03127; border-color: #f3b8b2; }
 }
 .card.dim { opacity: .5; }
+
+/* 첨부: PDF는 미리보기, 옆의 ⤓는 파일로 내려받기 */
+.file .alt {
+  margin-left: 8px; padding: 2px 7px; border-radius: 6px; font-size: 13px;
+  color: var(--text-3); border: 1px solid var(--line);
+}
+.file .alt:hover { color: var(--accent); border-color: var(--accent); }
+.file .go { margin-left: auto; }

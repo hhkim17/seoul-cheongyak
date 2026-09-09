@@ -582,11 +582,17 @@ function drawerHTML(l, a) {
 
   const files = l.attachments || [];
   const filesSection = files.length ? `<section><h3>공고문 첨부</h3><div class="files">${files.map((f) => {
-    const pdf = /\.pdf(\?|$)/i.test(f.url) || /pdf/i.test(f.name);
-    const hwp = /\.hwpx?(\?|$)/i.test(f.url) || /hwp/i.test(f.name);
-    return `<a class="file" href="${esc(f.url)}" target="_blank" rel="noopener">
+    const pdf = /\.pdf(\?|$)/i.test(f.url) || /\.pdf$/i.test(f.name);
+    const hwp = /\.hwpx?(\?|$)/i.test(f.url) || /\.hwpx?$/i.test(f.name);
+    // 기관 서버가 첨부를 모두 attachment로 내려보내 브라우저 미리보기가 막힌다.
+    // PDF는 구글 뷰어를 거쳐 웹에서 바로 읽고, 한글 파일은 그대로 내려받는다.
+    const href = pdf ? `https://docs.google.com/viewer?embedded=true&url=${encodeURIComponent(f.url)}` : f.url;
+    return `<a class="file" href="${esc(href)}" target="_blank" rel="noopener">
       <span class="ico">${pdf ? '📕' : hwp ? '📘' : '📄'}</span>
-      <span class="nm">${esc(f.name)}</span><span class="go">열기 ↗</span></a>`;
+      <span class="nm">${esc(f.name)}</span>
+      <span class="go">${pdf ? '미리보기' : '내려받기'} ↗</span>
+      ${pdf ? `<span class="alt" data-dl="${esc(f.url)}" title="파일로 내려받기">⤓</span>` : ''}
+    </a>`;
   }).join('')}</div></section>` : '';
 
   const cmpetRows = (l.cmpet || []).map((r) => `<tr>
@@ -1071,6 +1077,8 @@ function closeOverlays() {
 }
 
 document.addEventListener('click', (e) => {
+  const dl = e.target.closest('[data-dl]');
+  if (dl) { e.preventDefault(); e.stopPropagation(); window.open(dl.dataset.dl, '_blank', 'noopener'); return; }
   const scrapBtn = e.target.closest('#drawerPanel [data-scrap]');
   if (scrapBtn) { toggleScrap(scrapBtn.dataset.scrap); scrapBtn.classList.toggle('on'); return; }
   // 닫기 버튼 안의 아이콘을 눌러도 닫히도록 closest로 찾는다
