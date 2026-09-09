@@ -70,10 +70,6 @@ const myAgeYears = () => (profile.birthYm ? Math.floor(yearsBetween(`${profile.b
 const cornerOf = (l) => l.corner || CORNERS.find((c) => c.kinds.includes(l.kind))?.key || 'etc';
 const agencyOf = (l) => l.agency || '민간·기타';
 
-/** 가구원수 = 부양가족 + 본인 */
-const householdSize = () => Math.max(1, (Number(profile.family) || 0) + 1);
-const myAgeYears = () => (profile.birthYm ? Math.floor(yearsBetween(`${profile.birthYm}-01`) ?? 0) : null);
-
 /** 이 공고에 대해 내 소득·자산이 어디쯤인지 — 유형별 규칙은 standards.js가 가진다 */
 function incomeCheck(l) {
   if (!STD) return { verdict: 'unknown' };
