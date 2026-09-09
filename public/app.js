@@ -580,7 +580,16 @@ function drawerHTML(l, a) {
     </tr>`;
   }).join('');
 
-  const files = l.attachments || [];
+  // 같은 문서의 PDF판이 함께 올라오는 경우가 많다. 웹에서 읽히는 PDF를 위로 올리고,
+  // 짝이 있는 한글 파일은 중복임을 밝혀 덜 헷갈리게 한다.
+  const fileKey = (n) => n.replace(/\.(pdf|hwpx?|xlsx?|docx?|zip)$/i, '').replace(/[\s_()\[\]]/g, '').toLowerCase();
+  const raw = l.attachments || [];
+  const pdfKeys = new Set(raw.filter((f) => /\.pdf$/i.test(f.name)).map((f) => fileKey(f.name)));
+  const files = [...raw].sort((a, b) => {
+    const rank = (f) => (/\.pdf$/i.test(f.name) ? 0 : pdfKeys.has(fileKey(f.name)) ? 2 : 1);
+    return rank(a) - rank(b);
+  });
+
   const filesSection = files.length ? `<section><h3>공고문 첨부</h3><div class="files">${files.map((f) => {
     const pdf = /\.pdf(\?|$)/i.test(f.url) || /\.pdf$/i.test(f.name);
     const hwp = /\.hwpx?(\?|$)/i.test(f.url) || /\.hwpx?$/i.test(f.name);
@@ -589,7 +598,7 @@ function drawerHTML(l, a) {
     const href = pdf ? `https://docs.google.com/viewer?embedded=true&url=${encodeURIComponent(f.url)}` : f.url;
     return `<a class="file" href="${esc(href)}" target="_blank" rel="noopener">
       <span class="ico">${pdf ? '📕' : hwp ? '📘' : '📄'}</span>
-      <span class="nm">${esc(f.name)}</span>
+      <span class="nm">${esc(f.name)}${!pdf && pdfKeys.has(fileKey(f.name)) ? ' <span class="dupe">· 위 PDF와 같은 문서</span>' : ''}</span>
       <span class="go">${pdf ? '미리보기' : '내려받기'} ↗</span>
       ${pdf ? `<span class="alt" data-dl="${esc(f.url)}" title="파일로 내려받기">⤓</span>` : ''}
     </a>`;
