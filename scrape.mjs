@@ -41,25 +41,52 @@ function parseKoreanDate(raw, fallbackYear) {
   return null;
 }
 
-const PERIOD_KEY = /(접수\s?기간|신청\s?기간|모집\s?기간|청약\s?접수\s?기간|접수\s?일정|모집\s?신청일)/g;
-const PERIOD_RANGE = /((?:20\d{2}\s*[.\-년]\s*)?\d{1,2}\s*[.\-월]\s*\d{1,2}\s*일?\s*(?:\([가-힣]\))?)\s*[~∼〜–—-]\s*((?:20\d{2}\s*[.\-년]\s*)?\d{1,2}\s*[.\-월]\s*\d{1,2}\s*일?\s*(?:\([가-힣]\))?)/;
+// SH 공고 본문은 '■ 청약신청 일정 ○ [1순위] 2026. 9. 14.( 월 ) 10:00 ~ …' 처럼
+// 항목 기호와 띄어쓰기가 뒤섞여 있다. 구간을 잘라 그 안의 날짜를 모두 모아 최소~최대를 쓴다.
+const SCHEDULE_KEY = /(청약\s?신청\s?일정|청약\s?일정|접수\s?일정|신청\s?일정|접수\s?기간|신청\s?기간|모집\s?기간|접수\s?일시|신청\s?일시|모집\s?신청일)/g;
+const RESULT_KEY = /당첨자\s?발표/;
+const ANY_DATE = /(20\d{2})\s*[.\-년]\s*(\d{1,2})\s*[.\-월]\s*(\d{1,2})/g;
+const SECTION_END = /[■□▣]/;
+
+/** 구간 안의 모든 날짜를 ISO로 모은다 */
+function datesIn(text) {
+  const out = [];
+  for (const m of text.matchAll(ANY_DATE)) {
+    const iso = `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+    if (Number(m[2]) >= 1 && Number(m[2]) <= 12 && Number(m[3]) >= 1 && Number(m[3]) <= 31) out.push(iso);
+  }
+  return out;
+}
+
+/** 키워드 다음부터 다음 항목 기호(■)까지를 한 구간으로 본다 */
+function sectionAfter(text, index, max = 420) {
+  const raw = text.slice(index, index + max);
+  const stop = raw.slice(30).search(SECTION_END);   // 키워드 바로 뒤의 기호는 건너뛴다
+  return stop >= 0 ? raw.slice(0, stop + 30) : raw;
+}
 
 /**
- * SH 상세 본문에서 접수기간을 찾아본다.
- * 대부분은 첨부 공고문(PDF) 안에만 있어 못 찾는 경우가 더 많다 — 그때는 null을 주고,
- * 화면에서는 일정을 지어내지 않고 '원문 확인'으로 둔다.
+ * SH 상세 본문에서 청약 접수기간과 당첨자 발표일을 찾는다.
+ * 첨부 공고문(PDF)에만 있는 공고도 있어 못 찾으면 null을 준다 — 일정을 지어내지 않는다.
  */
-export function extractPeriod(text, noticeDate) {
-  const year = noticeDate ? noticeDate.slice(0, 4) : null;
-  for (const m of text.matchAll(PERIOD_KEY)) {
-    const window = text.slice(m.index, m.index + 220);
-    const r = window.match(PERIOD_RANGE);
-    if (!r) continue;
-    const from = parseKoreanDate(r[1], year);
-    const to = parseKoreanDate(r[2], year);
-    if (from && to && from <= to) return { from, to };
+export function extractPeriod(text) {
+  let period = null;
+  for (const m of text.matchAll(SCHEDULE_KEY)) {
+    const dates = datesIn(sectionAfter(text, m.index));
+    if (!dates.length) continue;
+    const from = dates.reduce((a, b) => (a < b ? a : b));
+    const to = dates.reduce((a, b) => (a > b ? a : b));
+    period = { from, to };
+    break;
   }
-  return null;
+
+  let resultDate = null;
+  const r = text.search(RESULT_KEY);
+  if (r >= 0) {
+    const d = datesIn(text.slice(r, r + 120));
+    if (d.length) resultDate = d[0];
+  }
+  return period ? { ...period, resultDate } : (resultDate ? { resultDate } : null);
 }
 
 /** 모집공고의 상세 페이지를 열어 접수기간을 채운다 (건수가 적어 부담이 크지 않다) */
@@ -68,8 +95,9 @@ async function fillPeriods(rows, limit) {
   for (const r of targets) {
     try {
       const html = await get(r.url);
-      const period = extractPeriod(strip(html), r.date);
-      if (period) { r.receiptStart = period.from; r.receiptEnd = period.to; }
+      const period = extractPeriod(strip(html));
+      if (period?.from) { r.receiptStart = period.from; r.receiptEnd = period.to; }
+      if (period?.resultDate) r.resultDate = period.resultDate;
     } catch { /* 한 건 실패해도 나머지는 계속 */ }
     await new Promise((res) => setTimeout(res, 600));
   }

@@ -45,25 +45,27 @@ const DEFAULT_CORNERS = [
   { key: 'apt', label: '아파트 분양', icon: '🏢', kinds: ['APT'], desc: '민영·국민주택 일반분양. 청약통장과 가점이 필요합니다.' },
   { key: 'remnant', label: '무순위·잔여세대', icon: '🎯', kinds: ['REMNDR'], desc: '미계약·부적격 물량 재공급. 가점 없이 추첨이라 통장이 약해도 노려볼 수 있습니다.' },
   { key: 'officetel', label: '오피스텔·도시형', icon: '🏬', kinds: ['URBTY'], desc: '오피스텔·도시형생활주택·생활형숙박시설. 청약통장 없이 추첨으로 뽑습니다.' },
-  { key: 'publicrent', label: '공공지원 민간임대', icon: '🤝', kinds: ['RENT'], desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
   { key: 'lhsale', label: '공공분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE', 'MYHOME_SALE'], desc: 'LH·SH·지방공사가 공급하는 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
-  { key: 'happy', label: '행복주택', icon: '🌤️', kinds: [], desc: '청년·신혼부부·대학생을 위한 임대주택. 시세보다 싸고 최장 6~10년 살 수 있습니다. LH·SH 공고를 함께 모았습니다.' },
-  { key: 'lhrent', label: '공공임대주택', icon: '🏠', kinds: ['LH_RENT', 'MYHOME_RENT'], desc: '행복주택·국민임대·영구임대·통합공공임대·매입/전세임대. 소득·자산 기준으로 뽑고, 부모님이 60세 이상이어도 유주택으로 봅니다.' },
-  { key: 'sh', label: 'SH 서울주택도시공사', icon: '🏙️', kinds: ['SH'], desc: '장기전세·청년안심주택·행복주택·매입임대·미리내집 등. SH는 공고 API가 없어 공고 게시판을 직접 읽어옵니다 — 일정·조건은 공고 원문을 확인하세요.' },
-  { key: 'hug', label: 'HUG 든든전세', icon: '🛡️', kinds: ['HUG'], desc: 'HUG가 전세보증금을 대신 갚고 매입한 주택을 공공임대로 공급합니다. 소득·자산 기준이 없고 무주택세대구성원이면 신청할 수 있습니다.' },
+  { key: 'happy', label: '행복주택', icon: '🌤️', kinds: [], desc: '청년·신혼부부·대학생 대상 임대주택. 시세보다 싸고 최장 6~10년 살 수 있습니다.' },
+  { key: 'longterm', label: '장기전세', icon: '🏘️', kinds: [], desc: '보증금만 내고 최장 20년까지 사는 SH 장기전세주택(시프트).' },
+  { key: 'youth', label: '청년안심주택', icon: '🧑‍🎓', kinds: [], desc: '역세권 청년주택. 청년·신혼부부가 시세보다 싸게 삽니다.' },
+  { key: 'purchase', label: '매입임대', icon: '🏡', kinds: [], desc: '기존 주택을 공사가 사들여 다시 빌려주는 방식. 미리내집·도전숙도 여기 들어갑니다.' },
+  { key: 'jeonsae', label: '전세임대', icon: '🔑', kinds: [], desc: '내가 살 집을 고르면 공사가 집주인과 전세계약을 맺고 다시 빌려줍니다.' },
+  { key: 'social', label: '사회주택', icon: '🏚️', kinds: [], desc: '사회적경제 주체가 운영하는 임대주택. 두레주택·희망하우징 포함.' },
+  { key: 'publichome', label: '공공임대', icon: '🏠', kinds: ['LH_RENT', 'MYHOME_RENT'], desc: '국민임대·영구임대·통합공공임대·재개발임대. 소득·자산 기준으로 뽑습니다.' },
+  { key: 'publicrent', label: '공공지원 민간임대', icon: '🤝', kinds: ['RENT'], desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
+  { key: 'hug', label: 'HUG 든든전세', icon: '🛡️', kinds: ['HUG'], desc: 'HUG가 전세보증금을 대신 갚고 매입한 주택. 소득·자산 기준이 없습니다.' },
   { key: 'welfare', label: '주거복지', icon: '💚', kinds: ['LH_WELFARE'], desc: '주거취약계층·고령자 등 대상 주거지원 공고.' },
+  { key: 'etc', label: '기타', icon: '🗂️', kinds: [], desc: '위 유형으로 나누기 어려운 공고입니다.' },
 ];
 let CORNERS = DEFAULT_CORNERS;
 
 // 임대 공고는 분양가가 아니라 보증금·월세로 읽어야 한다
 const RENTAL_KINDS = ['RENT', 'LH_RENT', 'LH_WELFARE', 'MYHOME_RENT', 'SH', 'HUG'];
 const isRental = (l) => RENTAL_KINDS.includes(l.kind);
-// 행복주택은 화면에서도 직접 판정한다 — 예전 스냅샷에도 바로 적용되도록
-const HAPPY_KINDS = new Set(['LH_RENT', 'MYHOME_RENT', 'SH']);
-const isHappyHouse = (l) =>
-  HAPPY_KINDS.has(l.kind) && /행복주택/.test(`${l.kindLabel ?? ''} ${l.subType ?? ''} ${l.name ?? ''}`);
-const cornerOf = (l) =>
-  isHappyHouse(l) ? 'happy' : (l.corner || CORNERS.find((c) => c.kinds.includes(l.kind))?.key || 'apt');
+// 코너 판정은 서버가 붙여 주는 corner를 그대로 쓰고, 없을 때만 kind로 되짚는다
+const cornerOf = (l) => l.corner || CORNERS.find((c) => c.kinds.includes(l.kind))?.key || 'etc';
+const agencyOf = (l) => l.agency || '민간·기타';
 
 const STATUSES = [
   { key: 'live', label: '접수중' },
@@ -178,7 +180,7 @@ const DEFAULT_WATCH = {
 };
 let watchCfg = { ...DEFAULT_WATCH, ...JSON.parse(localStorage.getItem('cheongyak.watch') || '{}') };
 
-let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false };
+let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false };
 let listings = [];
 let meta = {};
 
@@ -339,6 +341,8 @@ function chipRow(container, options, selected, onToggle) {
 
 function renderFilters() {
   chipRow($('#fStatus'), STATUSES, filters.status, (k) => { toggle(filters.status, k); renderAll(); });
+  const agencies = [...new Set(listings.map(agencyOf))].sort().map((a) => ({ key: a, label: a }));
+  chipRow($('#fAgency'), agencies, filters.agency, (k) => { toggle(filters.agency, k); renderAll(); });
   const gus = SEOUL_GU.filter((g) => listings.some((l) => l.gu === g)).map((g) => ({ key: g, label: g }));
   chipRow($('#fGu'), gus, filters.gu, (k) => { toggle(filters.gu, k); renderAll(); });
   $('#fSort').value = filters.sort;
@@ -352,6 +356,8 @@ const toggle = (arr, k) => { const i = arr.indexOf(k); i < 0 ? arr.push(k) : arr
  * 접수기간을 알 수 없는 공고(SH 게시판 등, 일정이 첨부 공고문 안에만 있는 경우)는
  * 접수중·접수예정을 볼 때 함께 보여준다. 빼 버리면 진행 중인 공고를 통째로 놓친다.
  */
+const passesAgency = (l) => !filters.agency.length || filters.agency.includes(agencyOf(l));
+
 function passesStatus(a) {
   if (!filters.status.length) return true;
   if (filters.status.includes(a.status.key)) return true;
@@ -363,10 +369,20 @@ function passesStatus(a) {
 const isRecruit = (l) => !l.noticeKind || l.noticeKind === '모집';
 const visibleKind = (l) => filters.showAnnouncements || isRecruit(l);
 
+/** 검색은 공고명·자치구·유형·주소·시행사를 한꺼번에 본다 */
+const haystack = (l) =>
+  `${l.name} ${l.gu ?? ''} ${l.kindLabel ?? ''} ${l.subType ?? ''} ${l.address ?? ''} ${l.developer ?? ''} ${l.builder ?? ''}`.toLowerCase();
+const matchesQuery = (l) => {
+  const q = filters.q.trim().toLowerCase();
+  if (!q) return true;
+  return q.split(/\s+/).every((w) => haystack(l).includes(w));   // 여러 낱말은 모두 포함
+};
+
 function renderCorners() {
   const nav = $('#corners'); nav.innerHTML = '';
   // 상태 필터만 적용한 모수로 코너별 건수를 센다 (탭을 눌러도 숫자가 흔들리지 않게)
-  const pool = listings.filter((l) => visibleKind(l) && passesStatus({ status: statusOf(l) }));
+  const pool = listings.filter((l) =>
+    visibleKind(l) && matchesQuery(l) && passesAgency(l) && passesStatus({ status: statusOf(l) }));
   const count = (key) => key === 'all' ? pool.length
     : key === 'scrap' ? listings.filter((l) => scraps.has(l.id)).length
     : pool.filter((l) => cornerOf(l) === key).length;
@@ -393,6 +409,8 @@ function visible() {
       // 스크랩 탭에서는 담아 둔 것을 상태와 무관하게 전부 보여준다
       if (filters.corner === 'scrap') return scraps.has(l.id);
       if (!visibleKind(l)) return false;
+      if (!matchesQuery(l)) return false;
+      if (!passesAgency(l)) return false;
       if (!passesStatus(a)) return false;
       if (filters.corner !== 'all' && cornerOf(l) !== filters.corner) return false;
       if (filters.gu.length && !(l.gu && filters.gu.includes(l.gu))) return false;
@@ -925,8 +943,19 @@ $('#fSort').onchange = (e) => { filters.sort = e.target.value; renderCards(); };
 $('#fBudget').onchange = (e) => { filters.budgetOnly = e.target.checked; renderCards(); };
 $('#fEligible').onchange = (e) => { filters.eligibleOnly = e.target.checked; renderCards(); };
 $('#fAnnounce').onchange = (e) => { filters.showAnnouncements = e.target.checked; renderAll(); };
+let searchTimer = null;
+$('#fSearch').oninput = (e) => {
+  filters.q = e.target.value;
+  $('#fSearchClear').hidden = !filters.q;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderAll, 180);   // 타이핑이 멈추면 그린다
+};
+$('#fSearchClear').onclick = () => { $('#fSearch').value = ''; filters.q = ''; $('#fSearchClear').hidden = true; renderAll(); };
+
 $('#fReset').onclick = () => {
-  filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false };
+  filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false };
+  $('#fSearch').value = '';
+  $('#fSearchClear').hidden = true;
   renderAll();
 };
 

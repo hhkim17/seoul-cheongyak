@@ -203,6 +203,20 @@ export function normalizeUrbtyModel(m) {
 
 // ── 코너(공급 유형 묶음) ─────────────────────────────────────────────
 // 화면 상단 탭이자, 각 공고가 어느 제도에 속하는지를 나타내는 분류.
+/**
+ * 공고 제목으로 성격을 가른다.
+ *  모집 — 입주자를 뽑는 공고 (정정공고 포함)
+ *  발표 — 당첨자·서류심사대상자 발표, 동호배정, 계약 안내 등 이미 끝난 건의 후속
+ *  안내 — 그 밖의 공지
+ * 청약홈 공고는 제목이 단지명뿐이라 분류하지 않고 '모집'으로 둔다.
+ */
+export function classifyNotice(title, fallback = '안내') {
+  const t = String(title || '');
+  if (/(당첨자|서류\s*심사|합격자|입주\s*대상자|대상자\s*발표|예비자\s*발표|명단\s*발표|동호\s*배정|사전\s*방문|계약\s*안내|입주\s*안내|결과\s*발표|추첨\s*결과)/.test(t)) return '발표';
+  if (/(모집|공급\s*공고|청약\s*접수|입주자\s*선정)/.test(t)) return '모집';
+  return fallback;
+}
+
 export const CORNERS = [
   // ── 분양 계열 ──
   { key: 'apt',        label: '아파트 분양',        icon: '🏢', kinds: ['APT'],
@@ -462,7 +476,7 @@ export function normalizeSh(r) {
     // 상세 본문에서 접수기간을 찾았으면 쓰고, 못 찾았으면 지어내지 않고 비워 둔다
     receiptStart: r.receiptStart || null, receiptEnd: r.receiptEnd || null,
     rank1Start: r.receiptStart || null, rank1End: r.receiptEnd || null,
-    resultDate: null, contractStart: null, contractEnd: null, moveIn: '',
+    resultDate: r.resultDate || null, contractStart: null, contractEnd: null, moveIn: '',
     developer: 'SH 서울주택도시공사', builder: '', tel: '1600-3456',
     homepage: 'https://www.i-sh.co.kr/', noticeUrl: r.url,
     subType: r.dept, scheduleUnknown: !r.receiptStart,

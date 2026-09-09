@@ -241,3 +241,12 @@ details.help p { margin: 6px 0 0; font-size: 12px; color: var(--text-3); }
 .star:hover { opacity: .8; }
 .star.on { filter: none; opacity: 1; }
 .card-head .right { display: flex; align-items: flex-start; gap: 6px; }
+
+/* 검색 */
+.searchbar { display: flex; gap: 8px; margin-bottom: 12px; }
+.searchbar input {
+  flex: 1; padding: 10px 14px; font-size: 13.5px;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px;
+}
+.searchbar input::placeholder { color: var(--text-3); }
+mark { background: color-mix(in srgb, var(--warn) 35%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
