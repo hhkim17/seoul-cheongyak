@@ -1,6 +1,8 @@
 // SH·HUG 공고 수집 — 두 기관 모두 실시간 공고 Open API가 없어 공개 게시판을 읽는다.
 // robots.txt에서 허용된 공개 목록 페이지만 보고, 요청 간격을 두며, 실패해도 앱 전체는 계속 돈다.
 
+import { fetchRetry } from './net.mjs';
+
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
 
 const strip = (h) => h.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ')
@@ -10,7 +12,7 @@ const strip = (h) => h.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ')
 const cellsOf = (tr) => [...tr.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)].map((m) => strip(m[1]));
 
 async function get(url, { charset = 'utf-8' } = {}) {
-  const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html' } });
+  const res = await fetchRetry(url, { headers: { 'User-Agent': UA, Accept: 'text/html' } });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const buf = await res.arrayBuffer();
   return new TextDecoder(charset).decode(buf);

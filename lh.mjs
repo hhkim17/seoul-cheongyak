@@ -4,6 +4,8 @@
 // 공고별 상세정보  https://www.data.go.kr/data/15057999/openapi.do
 // ※ 청약홈과 인증키는 같지만 활용신청은 API마다 따로 해야 한다.
 
+import { fetchRetry, partial, isTransient } from './net.mjs';
+
 const B = 'https://apis.data.go.kr/B552555';
 
 /** 상위 공고유형 코드 */
@@ -55,7 +57,7 @@ function findError(json, text) {
 async function call(path, serviceKey, params) {
   const qs = new URLSearchParams(params);
   const url = `${B}/${path}?${qs}&serviceKey=${encodeURIComponent(serviceKey)}`;
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  const res = await fetchRetry(url, { headers: { Accept: 'application/json' } });
   const text = await res.text();
 
   let json = null;
@@ -84,25 +86,41 @@ function windows(months, spanDays = 60) {
   return out;
 }
 
-/** 공고 목록. uppCd 미지정이면 분양·임대·주거복지·신혼희망타운을 모두 훑는다. */
+/**
+ * 공고 목록. 유형 4가지 × 2개월 창 여러 개를 훑으므로 요청 수가 많다.
+ * 한 조각이 실패해도 나머지는 살리고, 전부 실패했을 때만 오류로 올린다.
+ */
 export async function lhNotices(serviceKey, { months = 14, cnpCd = SEOUL_CNP_CD, uppCodes = Object.keys(LH_UPP), perPage = 100, maxPages = 3 } = {}) {
-  const out = [];
+  const chunks = [];
   for (const upp of uppCodes) {
     for (const w of windows(months)) {
-      for (let page = 1; page <= maxPages; page++) {
-        const json = await call('lhLeaseNoticeInfo1/lhLeaseNoticeInfo1', serviceKey, {
-          PG_SZ: String(perPage), PAGE: String(page),
-          UPP_AIS_TP_CD: upp, CNP_CD: cnpCd,
-          PAN_NT_ST_DT: w.from, CLSG_DT: w.to,
-        });
-        const rows = extractRows(json).filter((r) => r.PAN_ID || r.PAN_NM);
-        out.push(...rows.map((r) => ({ ...r, UPP_AIS_TP_CD: r.UPP_AIS_TP_CD || upp })));
-        if (rows.length < perPage) break;
+      try {
+        const rows = [];
+        for (let page = 1; page <= maxPages; page++) {
+          const json = await call('lhLeaseNoticeInfo1/lhLeaseNoticeInfo1', serviceKey, {
+            PG_SZ: String(perPage), PAGE: String(page),
+            UPP_AIS_TP_CD: upp, CNP_CD: cnpCd,
+            PAN_NT_ST_DT: w.from, CLSG_DT: w.to,
+          });
+          const got = extractRows(json).filter((r) => r.PAN_ID || r.PAN_NM);
+          rows.push(...got.map((r) => ({ ...r, UPP_AIS_TP_CD: r.UPP_AIS_TP_CD || upp })));
+          if (got.length < perPage) break;
+        }
+        chunks.push({ ok: true, rows });
+      } catch (e) {
+        // 활용신청이 안 된 경우는 다시 시도해도 소용없으니 그대로 올린다
+        if (e instanceof LhError && e.code === 'NOT_REGISTERED') throw e;
+        chunks.push({ ok: false, rows: [], error: e });
       }
     }
   }
+
+  const res = partial(chunks);
+  if (res.allFailed) throw res.firstError ?? new LhError('LH 조회에 모두 실패했습니다.', 'ALL_FAILED');
+  if (res.failCount) console.log(`  LH: ${res.failCount}개 구간을 건너뛰었습니다(일시 오류) — ${res.okCount}개 구간은 정상`);
+
   const seen = new Set();
-  return out.filter((r) => { const k = `${r.PAN_ID}|${r.AIS_TP_CD}`; return seen.has(k) ? false : seen.add(k); });
+  return res.rows.filter((r) => { const k = `${r.PAN_ID}|${r.AIS_TP_CD}`; return seen.has(k) ? false : seen.add(k); });
 }
 
 /**

@@ -2,6 +2,8 @@
 // 스펙 출처: https://infuser.odcloud.kr/api/stages/37000/api-docs (분양정보)
 //            https://infuser.odcloud.kr/oas/docs?namespace=ApplyhomeInfoCmpetRtSvc/v1 (경쟁률)
 
+import { fetchRetry } from './net.mjs';
+
 const BASE = 'https://api.odcloud.kr/api';
 const DETAIL = `${BASE}/ApplyhomeInfoDetailSvc/v1`;
 const CMPET = `${BASE}/ApplyhomeInfoCmpetRtSvc/v1`;
@@ -24,7 +26,7 @@ function keyParam(serviceKey) {
 async function call(url, serviceKey, params = {}) {
   const qs = new URLSearchParams({ page: '1', perPage: '100', returnType: 'JSON', ...params });
   const full = `${url}?${qs.toString()}&serviceKey=${keyParam(serviceKey)}`;
-  const res = await fetch(full, { headers: { Accept: 'application/json' } });
+  const res = await fetchRetry(full, { headers: { Accept: 'application/json' } });
   const text = await res.text();
   let json = null;
   try { json = JSON.parse(text); } catch { /* XML 에러 응답 */ }

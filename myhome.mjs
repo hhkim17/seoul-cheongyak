@@ -5,6 +5,8 @@
 // SH는 자체 실시간 공고 API가 없으므로, SH 물량은 이 API를 통해 들어온다.
 // 개발계정 하루 1,000건 제한이 있어 호출을 아껴 쓴다.
 
+import { fetchRetry } from './net.mjs';
+
 const BASE = 'https://apis.data.go.kr/1613000/HWSPR02';
 
 export class MyhomeError extends Error {
@@ -42,7 +44,7 @@ function findError(json, text) {
 
 async function call(op, serviceKey, params) {
   const qs = new URLSearchParams({ type: 'json', ...params });
-  const res = await fetch(`${BASE}/${op}?${qs}&serviceKey=${encodeURIComponent(serviceKey)}`, { headers: { Accept: 'application/json' } });
+  const res = await fetchRetry(`${BASE}/${op}?${qs}&serviceKey=${encodeURIComponent(serviceKey)}`, { headers: { Accept: 'application/json' } });
   const text = await res.text();
   let json = null;
   try { json = JSON.parse(text); } catch { /* XML 에러 */ }
@@ -59,7 +61,14 @@ async function call(op, serviceKey, params) {
 async function listAll(op, serviceKey, { perPage = 500, maxPages = 6 } = {}) {
   const out = [];
   for (let page = 1; page <= maxPages; page++) {
-    const json = await call(op, serviceKey, { numOfRows: String(perPage), pageNo: String(page) });
+    let json;
+    try {
+      json = await call(op, serviceKey, { numOfRows: String(perPage), pageNo: String(page) });
+    } catch (e) {
+      if (page === 1) throw e;          // 첫 장부터 실패하면 알릴 수밖에 없다
+      console.log(`  마이홈: ${page}쪽을 건너뜁니다 — ${e.message}`);
+      break;                            // 뒷장이 실패하면 앞장까지만 쓴다
+    }
     const body = json?.response?.body;
     const rows = body ? [].concat(body.item ?? []) : extractRows(json);
     out.push(...rows);
