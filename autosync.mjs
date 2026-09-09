@@ -39,7 +39,9 @@ async function sync() {
   try {
     if (!git('status', '--porcelain')) { syncing = false; return; }
 
-    git('add', '-A');
+    // 공고 데이터(docs/data)는 GitHub Actions가 30분마다 새로 만든다.
+    // 여기서도 올리면 같은 파일을 양쪽에서 고쳐 매번 충돌이 난다 — 코드만 올린다.
+    git('add', '-A', '--', '.', ':!docs/data');
     if (!git('diff', '--cached', '--name-only')) { syncing = false; return; }
     if (!stagedLooksSafe()) { git('reset'); syncing = false; return; }
 
@@ -49,7 +51,7 @@ async function sync() {
     // 데이터는 건드리지 않으므로 인증키도 API 호출도 필요 없다.
     if (files.some((f) => f.startsWith('public/'))) {
       execFileSync('node', ['build.mjs', '--assets'], { cwd: ROOT, encoding: 'utf8' });
-      git('add', '-A');
+      git('add', '-A', '--', '.', ':!docs/data');
       files = git('diff', '--cached', '--name-only').split('\n').filter(Boolean);
       log('화면 코드 변경 → docs/ 재생성');
     }
