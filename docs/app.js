@@ -180,7 +180,7 @@ const DEFAULT_WATCH = {
 };
 let watchCfg = { ...DEFAULT_WATCH, ...JSON.parse(localStorage.getItem('cheongyak.watch') || '{}') };
 
-let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false, closedDays: 3 };
+let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false, incomeFitOnly: false };
 let listings = [];
 let meta = {};
 
@@ -349,7 +349,6 @@ function renderFilters() {
   $('#fBudget').checked = filters.budgetOnly;
   $('#fEligible').checked = filters.eligibleOnly;
   $('#fAnnounce').checked = filters.showAnnouncements;
-  $('#fClosedDays').value = String(filters.closedDays);
 }
 const toggle = (arr, k) => { const i = arr.indexOf(k); i < 0 ? arr.push(k) : arr.splice(i, 1); };
 
@@ -359,16 +358,14 @@ const toggle = (arr, k) => { const i = arr.indexOf(k); i < 0 ? arr.push(k) : arr
  */
 const passesAgency = (l) => !filters.agency.length || filters.agency.includes(agencyOf(l));
 
-/**
- * 마감된 공고는 며칠까지만 남긴다(기본 3일).
- * 데이터 자체는 지우지 않는다 — 지난 공고의 당첨 커트라인이 맞춤 점수 계산에 쓰인다.
- */
+// 마감된 공고는 일주일 뒤 목록에서 사라진다.
+// 데이터 자체는 지우지 않는다 — 지난 공고의 당첨 커트라인이 맞춤 점수 계산에 쓰인다.
+const CLOSED_VISIBLE_DAYS = 7;
+
 function withinClosedWindow(a) {
   if (a.status.key !== 'done') return true;
-  if (!filters.closedDays) return true;                 // 0이면 전부 보기
   if (!a.status.until) return false;                    // 마감일을 모르면 오래된 것으로 본다
-  const daysSince = -(dayDiff(a.status.until) ?? 0);
-  return daysSince <= filters.closedDays;
+  return -(dayDiff(a.status.until) ?? 0) <= CLOSED_VISIBLE_DAYS;
 }
 
 function passesStatus(a) {
@@ -957,7 +954,6 @@ $('#fSort').onchange = (e) => { filters.sort = e.target.value; renderCards(); };
 $('#fBudget').onchange = (e) => { filters.budgetOnly = e.target.checked; renderCards(); };
 $('#fEligible').onchange = (e) => { filters.eligibleOnly = e.target.checked; renderCards(); };
 $('#fAnnounce').onchange = (e) => { filters.showAnnouncements = e.target.checked; renderAll(); };
-$('#fClosedDays').onchange = (e) => { filters.closedDays = Number(e.target.value); renderAll(); };
 let searchTimer = null;
 $('#fSearch').oninput = (e) => {
   filters.q = e.target.value;
@@ -968,7 +964,7 @@ $('#fSearch').oninput = (e) => {
 $('#fSearchClear').onclick = () => { $('#fSearch').value = ''; filters.q = ''; $('#fSearchClear').hidden = true; renderAll(); };
 
 $('#fReset').onclick = () => {
-  filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false, closedDays: 3 };
+  filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false, incomeFitOnly: false };
   $('#fSearch').value = '';
   $('#fSearchClear').hidden = true;
   renderAll();
