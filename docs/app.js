@@ -621,6 +621,19 @@ function drawerHTML(l, a) {
     ${l.flags?.regulated ? '<span class="badge hot">조정대상지역</span>' : ''}
   </div>
 
+  ${a.income && a.income.verdict !== 'unknown' ? `<section>
+    <h3>소득 · 자산 기준</h3>
+    <p class="lead small">
+      <span class="verdict ${a.income.verdict}">${a.income.verdict === 'ok' ? '기준 이내' : a.income.verdict === 'tight' ? '아슬아슬' : '초과'}</span>
+      &nbsp; 내 소득 <b>${a.income.myPercent}%</b> · ${esc(a.income.rule ?? '')} 기준 <b>${a.income.thresholdPercent}%</b>
+      ${a.income.thresholdWon ? `(월 ${a.income.thresholdWon.toLocaleString('ko-KR')}원)` : ''}
+      ${a.income.assetOver ? `<br><b>${esc(a.income.assetOver)} 한도를 넘습니다.</b>` : ''}
+    </p>
+    ${a.income.note ? `<p class="fineprint">${esc(a.income.note)}</p>` : ''}
+    <p class="fineprint">${INCOME_STD?.year ?? ''}년 공표 기준으로 계산했습니다. 공고마다 우선공급 계층·면적별 예외가 있으니 최종 자격은 공고문을 확인하세요.
+      ${a.income.source ? `<a href="${esc(a.income.source)}" target="_blank" rel="noopener">기준 출처 ↗</a>` : ''}</p>
+  </section>` : ''}
+
   <section>
     <h3>내 조건 맞춤도 ${a.score}점</h3>
     <div class="reasons">${a.reasons.map((r) => `<span class="reason${r.neg ? ' neg' : ''}">${esc(r.t)}</span>`).join('')}</div>
@@ -678,12 +691,16 @@ function openProfile() {
   $('#pNoHouseSince').value = profile.noHouseSince || '';
   $('#pAccountYm').value = profile.accountYm || '';
   $('#pFamily').value = profile.family;
+  $('#pIncome').value = profile.incomeManwon ?? '';
+  $('#pAsset').value = profile.assetManwon ?? '';
+  $('#pCar').value = profile.carManwon ?? '';
   $('#pBudget').value = profile.budgetEok;
   $('#pAreaMin').value = profile.areaMin;
   $('#pAreaMax').value = profile.areaMax;
   $('#pSeoulResident').checked = profile.seoulResident;
   renderProfileChips();
   updateScoreOut();
+  updateIncomeOut();
   $('#profileModal').hidden = false;
 }
 
@@ -701,6 +718,26 @@ function formFromModal() {
     accountYm: $('#pAccountYm').value,
     family: +$('#pFamily').value || 0,
   };
+}
+
+function updateIncomeOut() {
+  const box = $('#incomeOut');
+  const won = Number($('#pIncome').value) * 10000;
+  const size = Math.max(1, (Number($('#pFamily').value) || 0) + 1);
+  if (!INCOME_STD?.base) { box.textContent = '소득 기준표를 아직 불러오지 못했습니다.'; return; }
+  if (!won) {
+    box.innerHTML = `가구 월평균소득을 넣으면 공고마다 기준 대비 위치를 보여줍니다.
+      <span class="sub">${INCOME_STD.year}년 기준 · ${size}인가구 100% = ${(INCOME_STD.base[size] ?? 0).toLocaleString('ko-KR')}원</span>`;
+    return;
+  }
+  const base = INCOME_STD.base[size] ?? INCOME_STD.base[Object.keys(INCOME_STD.base).at(-1)];
+  const pct = Math.round(won / base * 100);
+  const tier = Std.guessTier({ ageYears: myAgeYears(), special: profile.special });
+  const limits = Std.ASSET_LIMITS[tier] ?? Std.ASSET_LIMITS['일반'];
+  box.innerHTML = `내 소득은 ${size}인가구 기준 <b>약 ${pct}%</b>
+    <span class="sub">${INCOME_STD.year}년 기준 100% = ${base.toLocaleString('ko-KR')}원 ·
+    행복주택 ${size === 1 ? 120 : size === 2 ? 110 : 100}% 이내 / 국민임대 ${size === 1 ? 90 : size === 2 ? 80 : 70}% 이내<br>
+    자산 한도(${esc(tier)}): 총자산 ${limits.total.toLocaleString('ko-KR')}만원 · 자동차 ${limits.car.toLocaleString('ko-KR')}만원</span>`;
 }
 
 function updateScoreOut() {
@@ -1006,11 +1043,17 @@ $('#fReset').onclick = () => {
 for (const id of ['pBirth', 'pMarriage', 'pNoHouseSince', 'pAccountYm', 'pFamily']) {
   $('#' + id).addEventListener('input', updateScoreOut);
 }
+for (const id of ['pIncome', 'pFamily', 'pBirth']) {
+  $('#' + id).addEventListener('input', updateIncomeOut);
+}
 
 $('#pSave').onclick = () => {
   profile = {
     ...profile,
     ...formFromModal(),
+    incomeManwon: $('#pIncome').value === '' ? null : Number($('#pIncome').value),
+    assetManwon: $('#pAsset').value === '' ? null : Number($('#pAsset').value),
+    carManwon: $('#pCar').value === '' ? null : Number($('#pCar').value),
     budgetEok: +$('#pBudget').value || 0,
     areaMin: +$('#pAreaMin').value || 0,
     areaMax: +$('#pAreaMax').value || 999,
