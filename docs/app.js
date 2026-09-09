@@ -47,6 +47,7 @@ const DEFAULT_CORNERS = [
   { key: 'officetel', label: '오피스텔·도시형', icon: '🏬', kinds: ['URBTY'], desc: '오피스텔·도시형생활주택·생활형숙박시설. 청약통장 없이 추첨으로 뽑습니다.' },
   { key: 'publicrent', label: '공공지원 민간임대', icon: '🤝', kinds: ['RENT'], desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
   { key: 'lhsale', label: '공공분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE', 'MYHOME_SALE'], desc: 'LH·SH·지방공사가 공급하는 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
+  { key: 'happy', label: '행복주택', icon: '🌤️', kinds: [], desc: '청년·신혼부부·대학생을 위한 임대주택. 시세보다 싸고 최장 6~10년 살 수 있습니다. LH·SH 공고를 함께 모았습니다.' },
   { key: 'lhrent', label: '공공임대주택', icon: '🏠', kinds: ['LH_RENT', 'MYHOME_RENT'], desc: '행복주택·국민임대·영구임대·통합공공임대·매입/전세임대. 소득·자산 기준으로 뽑고, 부모님이 60세 이상이어도 유주택으로 봅니다.' },
   { key: 'sh', label: 'SH 서울주택도시공사', icon: '🏙️', kinds: ['SH'], desc: '장기전세·청년안심주택·행복주택·매입임대·미리내집 등. SH는 공고 API가 없어 공고 게시판을 직접 읽어옵니다 — 일정·조건은 공고 원문을 확인하세요.' },
   { key: 'hug', label: 'HUG 든든전세', icon: '🛡️', kinds: ['HUG'], desc: 'HUG가 전세보증금을 대신 갚고 매입한 주택을 공공임대로 공급합니다. 소득·자산 기준이 없고 무주택세대구성원이면 신청할 수 있습니다.' },
@@ -57,7 +58,12 @@ let CORNERS = DEFAULT_CORNERS;
 // 임대 공고는 분양가가 아니라 보증금·월세로 읽어야 한다
 const RENTAL_KINDS = ['RENT', 'LH_RENT', 'LH_WELFARE', 'MYHOME_RENT', 'SH', 'HUG'];
 const isRental = (l) => RENTAL_KINDS.includes(l.kind);
-const cornerOf = (l) => l.corner || CORNERS.find((c) => c.kinds.includes(l.kind))?.key || 'apt';
+// 행복주택은 화면에서도 직접 판정한다 — 예전 스냅샷에도 바로 적용되도록
+const HAPPY_KINDS = new Set(['LH_RENT', 'MYHOME_RENT', 'SH']);
+const isHappyHouse = (l) =>
+  HAPPY_KINDS.has(l.kind) && /행복주택/.test(`${l.kindLabel ?? ''} ${l.subType ?? ''} ${l.name ?? ''}`);
+const cornerOf = (l) =>
+  isHappyHouse(l) ? 'happy' : (l.corner || CORNERS.find((c) => c.kinds.includes(l.kind))?.key || 'apt');
 
 const STATUSES = [
   { key: 'live', label: '접수중' },
