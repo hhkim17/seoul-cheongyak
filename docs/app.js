@@ -68,12 +68,16 @@ const myAgeYears = () => (profile.birthYm ? Math.floor(yearsBetween(`${profile.b
 
 /** 이 공고에 대해 내 소득·자산이 어디쯤인지 */
 function incomeCheck(l) {
-  if (!INCOME_STD || profile.incomeManwon == null) return { verdict: 'unknown' };
+  if (!INCOME_STD) return { verdict: 'unknown' };
+  if (profile.incomeManwon == null && profile.soloIncomeManwon == null) return { verdict: 'unknown' };
   const corner = cornerOf(l);
   const tier = Std.guessTier({ ageYears: myAgeYears(), special: profile.special });
   const common = { corner, totalAssetManwon: profile.assetManwon, carManwon: profile.carManwon, tier, base: INCOME_STD.base };
 
-  const household = Std.evaluate({ ...common, income: profile.incomeManwon * 10000, household: householdSize() });
+  // 세대 합산을 안 넣었으면 그 기준으로는 판정하지 않는다
+  const household = profile.incomeManwon != null
+    ? Std.evaluate({ ...common, income: profile.incomeManwon * 10000, household: householdSize() })
+    : { verdict: 'unknown' };
 
   // 청년 계층은 본인 소득만 보는 유형이 있다 — 그 경우 1인가구 기준으로 따로 계산해 함께 보여준다
   const age = myAgeYears();
@@ -84,9 +88,10 @@ function incomeCheck(l) {
     ? Std.evaluate({ ...common, income: profile.soloIncomeManwon * 10000, household: 1 })
     : null;
 
-  // 청년 기준으로 통과하면 그쪽을 앞세운다 (더 유리한 신청 경로이므로)
-  if (solo && solo.verdict !== 'over' && household.verdict === 'over') {
-    return { ...solo, byYouth: true, householdVerdict: household };
+  // 청년 기준으로 통과하면 그쪽을 앞세운다 (더 유리한 신청 경로이므로).
+  // 세대 합산을 아예 안 넣은 경우에도 청년 기준만으로 판정한다.
+  if (solo && solo.verdict !== 'over' && household.verdict !== 'ok' && household.verdict !== 'tight') {
+    return { ...solo, byYouth: true, householdVerdict: household.verdict === 'unknown' ? null : household };
   }
   return { ...household, solo };
 }
@@ -654,7 +659,9 @@ function drawerHTML(l, a) {
       &nbsp; 내 소득 <b>${a.income.myPercent}%</b> · ${esc(a.income.rule ?? '')} 기준 <b>${a.income.thresholdPercent}%</b>
       ${a.income.thresholdWon ? `(월 ${a.income.thresholdWon.toLocaleString('ko-KR')}원)` : ''}
       ${a.income.assetOver ? `<br><b>${esc(a.income.assetOver)} 한도를 넘습니다.</b>` : ''}
-      ${a.income.byYouth ? `<br><span class="fineprint">세대 합산으로는 ${a.income.householdVerdict.myPercent}%로 기준을 넘지만, 청년 계층(본인 소득)으로 신청하면 들어옵니다.</span>` : ''}
+      ${a.income.byYouth ? `<br><span class="fineprint">${a.income.householdVerdict
+        ? `세대 합산으로는 ${a.income.householdVerdict.myPercent}%로 기준을 넘지만, 청년 계층(본인 소득)으로 신청하면 들어옵니다.`
+        : '청년 계층(본인 소득) 기준으로 계산했습니다.'}</span>` : ''}
       ${a.income.solo && a.income.solo.verdict !== 'unknown' ? `<br><span class="fineprint">청년 계층(본인 소득) 기준으로는 ${a.income.solo.myPercent}% — ${a.income.solo.verdict === 'over' ? '초과' : '기준 이내'}</span>` : ''}
     </p>
     ${a.income.note ? `<p class="fineprint">${esc(a.income.note)}</p>` : ''}
@@ -754,8 +761,14 @@ function updateIncomeOut() {
   const won = Number($('#pIncome').value) * 10000;
   const size = Math.max(1, (Number($('#pFamily').value) || 0) + 1);
   if (!INCOME_STD?.base) { box.textContent = '소득 기준표를 아직 불러오지 못했습니다.'; return; }
+  const soloOnly = Number($('#pSolo').value) * 10000;
+  if (!won && soloOnly && INCOME_STD.base[1]) {
+    box.innerHTML = `청년 계층(본인 소득) 기준으로 <b>약 ${Math.round(soloOnly / INCOME_STD.base[1] * 100)}%</b>
+      <span class="sub">행복주택 청년은 1인가구 120% 이내 · 세대 합산을 넣으면 그 밖의 유형도 판정합니다.</span>`;
+    return;
+  }
   if (!won) {
-    box.innerHTML = `가구 월평균소득을 넣으면 공고마다 기준 대비 위치를 보여줍니다.
+    box.innerHTML = `소득을 넣으면 공고마다 기준 대비 위치를 보여줍니다.
       <span class="sub">${INCOME_STD.year}년 기준 · ${size}인가구 100% = ${(INCOME_STD.base[size] ?? 0).toLocaleString('ko-KR')}원</span>`;
     return;
   }

@@ -228,15 +228,18 @@
     <fieldset>
       <legend>소득 · 자산 <span class="hint">(공공임대·공공분양 자격 계산용)</span></legend>
       <div class="grid3">
-        <label class="field"><span>가구 월평균소득 (만원) <span class="hint">세대 합산</span></span><input id="pIncome" type="number" min="0" step="10" placeholder="세전, 세대원 소득 모두 더해서"></label>
+        <label class="field"><span>세대 합산 월평균소득 (만원) <span class="hint">대부분의 유형</span></span><input id="pIncome" type="number" min="0" step="10" placeholder="세전, 세대원 소득 모두 더해서"></label>
         <label class="field"><span>총자산 (만원)</span><input id="pAsset" type="number" min="0" step="100" placeholder="부채 뺀 금액"></label>
         <label class="field"><span>자동차가액 (만원)</span><input id="pCar" type="number" min="0" step="100" placeholder="없으면 0"></label>
       </div>
       <label class="field" style="margin-top:10px">
-        <span>본인 소득만 (만원) <span class="hint">선택 — 청년 계층으로 신청할 때 씁니다</span></span>
+        <span>본인 월평균소득 (만원) <span class="hint">청년 계층(LH 행복주택)</span></span>
         <input id="pSolo" type="number" min="0" step="10" placeholder="부모님과 함께 살아도 청년은 본인 소득만 봅니다">
       </label>
       <div id="incomeOut" class="score-out"></div>
+      <p class="fineprint">둘 중 하나만 넣어도 됩니다. 청년이라면 <b>본인 소득</b>만으로도 행복주택은 판정되고,
+        세대 합산을 넣으면 장기전세·매입임대·국민임대까지 함께 봅니다.
+        대학생 계층(본인+부모 합산)은 따로 입력받지 않습니다 — 그 경우 세대 합산 칸을 쓰세요.</p>
       <details class="help">
         <summary>이 숫자는 어디에 쓰이나요?</summary>
         <ul>
