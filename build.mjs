@@ -15,6 +15,8 @@ const PUBLIC = path.join(ROOT, 'public');
 const OUT = path.join(ROOT, 'docs');
 
 const copyAssets = () => {
+  // 기준표는 standards.mjs 하나만 고치면 되도록, 화면용 사본을 여기서 만든다
+  fs.copyFileSync(path.join(ROOT, 'standards.mjs'), path.join(PUBLIC, 'standards.js'));
   fs.mkdirSync(path.join(OUT, 'data'), { recursive: true });
   for (const f of fs.readdirSync(PUBLIC)) fs.copyFileSync(path.join(PUBLIC, f), path.join(OUT, f));
   fs.writeFileSync(path.join(OUT, '.nojekyll'), ''); // _ 로 시작하는 파일도 서빙되게
