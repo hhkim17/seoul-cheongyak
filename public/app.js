@@ -1,5 +1,6 @@
 // 서울 청약 대시보드 — 프론트엔드
 import * as Sync from './sync.js';
+import * as Std from './standards.js';
 
 const $ = (s) => document.querySelector(s);
 const el = (t, cls, html) => { const e = document.createElement(t); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -59,6 +60,25 @@ const DEFAULT_CORNERS = [
   { key: 'etc', label: '기타', icon: '🗂️', kinds: [], desc: '위 유형으로 나누기 어려운 공고입니다.' },
 ];
 let CORNERS = DEFAULT_CORNERS;
+let INCOME_STD = null;   // { year, base: {가구원수: 100% 월소득(원)} }
+
+/** 가구원수 = 부양가족 + 본인 */
+const householdSize = () => Math.max(1, (Number(profile.family) || 0) + 1);
+const myAgeYears = () => (profile.birthYm ? Math.floor(yearsBetween(`${profile.birthYm}-01`) ?? 0) : null);
+
+/** 이 공고에 대해 내 소득·자산이 어디쯤인지 */
+function incomeCheck(l) {
+  if (!INCOME_STD || profile.incomeManwon == null) return { verdict: 'unknown' };
+  return Std.evaluate({
+    corner: cornerOf(l),
+    income: profile.incomeManwon * 10000,
+    household: householdSize(),
+    totalAssetManwon: profile.assetManwon,
+    carManwon: profile.carManwon,
+    tier: Std.guessTier({ ageYears: myAgeYears(), special: profile.special }),
+    base: INCOME_STD.base,
+  });
+}
 
 // 임대 공고는 분양가가 아니라 보증금·월세로 읽어야 한다
 const RENTAL_KINDS = ['RENT', 'LH_RENT', 'LH_WELFARE', 'MYHOME_RENT', 'SH', 'HUG'];
@@ -157,6 +177,7 @@ function statusOf(l) {
 // ── 프로필 ───────────────────────────────────────────────────────────
 const DEFAULT_PROFILE = {
   birthYm: '', marriageDate: '', noHouseSince: '', accountYm: '', family: 0,
+  incomeManwon: null, assetManwon: null, carManwon: null,
   budgetEok: 9, areaMin: 49, areaMax: 99,
   special: [], gu: [], seoulResident: true,
 };
@@ -200,6 +221,7 @@ function analyze(l) {
     profile.special.includes(t.key) && models.some((m) => (m.special?.[t.field] || 0) > 0));
 
   const st = statusOf(l);
+  const income = incomeCheck(l);
   const reasons = [];
   let score = 0;
 
@@ -225,9 +247,11 @@ function analyze(l) {
     score += 25;
     reasons.push({ t: `특별공급 해당 · ${eligibleSpecial.map((t) => t.label).join('·')}` });
   } else if (rental) {
-    // 임대는 가점이 아니라 소득·자산 기준이라 앱이 당락을 판단할 수 없다
-    score += 18;
-    reasons.push({ t: '소득·자산 요건 — 공고문 확인 필요' });
+    // 임대는 가점이 아니라 소득·자산 기준으로 뽑는다
+    if (income.verdict === 'ok') { score += 25; reasons.push({ t: `소득 ${income.myPercent}% — ${income.rule} 기준 ${income.thresholdPercent}% 이내` }); }
+    else if (income.verdict === 'tight') { score += 15; reasons.push({ t: `소득 ${income.myPercent}% — 기준 ${income.thresholdPercent}%에 근접` }); }
+    else if (income.verdict === 'over') { reasons.push({ t: income.assetOver ? `${income.assetOver} 한도 초과` : `소득 ${income.myPercent}% — 기준 ${income.thresholdPercent}% 초과`, neg: true }); }
+    else { score += 18; reasons.push({ t: '소득·자산 요건 — 공고문 확인 필요' }); }
   } else if (l.kind === 'LH_SALE') {
     score += 16;
     reasons.push({ t: 'LH 공공분양 — 소득·자산 요건 있음' });
@@ -272,6 +296,7 @@ function analyze(l) {
     maxArea: areas.length ? Math.max(...areas) : null,
     pyeong: pp.length ? Math.round(pp.reduce((a, b) => a + b, 0) / pp.length) : null,
     rental,
+    income,
     minMonthly: monthlies.length ? Math.min(...monthlies) : null,
     maxMonthly: monthlies.length ? Math.max(...monthlies) : null,
     eligibleSpecial,
@@ -349,6 +374,7 @@ function renderFilters() {
   $('#fBudget').checked = filters.budgetOnly;
   $('#fEligible').checked = filters.eligibleOnly;
   $('#fAnnounce').checked = filters.showAnnouncements;
+  $('#fIncomeFit').checked = filters.incomeFitOnly;
 }
 const toggle = (arr, k) => { const i = arr.indexOf(k); i < 0 ? arr.push(k) : arr.splice(i, 1); };
 
@@ -427,6 +453,7 @@ function visible() {
       if (filters.gu.length && !(l.gu && filters.gu.includes(l.gu))) return false;
       if (filters.budgetOnly && a.pricedCount > 0 && a.affordable === 0) return false;
       if (filters.eligibleOnly && !a.eligibleSpecial.length) return false;
+      if (filters.incomeFitOnly && a.income?.verdict === 'over') return false;
       return true;
     })
     .sort((x, y) => {
@@ -485,6 +512,9 @@ function cardOf(l, a) {
       ${l.flags?.priceCap ? '<span class="badge">분양가상한제</span>' : ''}
       ${l.flags?.speculative ? '<span class="badge hot">투기과열</span>' : ''}
       ${a.cmpetAvg != null ? `<span class="badge ${a.cmpetAvg >= 20 ? 'hot' : ''}">경쟁률 ${a.cmpetAvg}:1</span>` : ''}
+      ${a.income?.verdict === 'ok' ? '<span class="verdict ok">소득 기준 이내</span>'
+        : a.income?.verdict === 'tight' ? '<span class="verdict tight">소득 기준 아슬아슬</span>'
+        : a.income?.verdict === 'over' ? `<span class="verdict over">${esc(a.income.assetOver ? a.income.assetOver + ' 초과' : '소득 기준 초과')}</span>` : ''}
     </div>
     <div class="kv">
       <div><span>${a.rental ? '보증금' : '분양가'}</span><b>${a.minPrice != null ? `${eok(a.minPrice)}${a.maxPrice !== a.minPrice ? ` ~ ${eok(a.maxPrice)}` : ''}` : '공고문 참조'}</b></div>
@@ -495,6 +525,7 @@ function cardOf(l, a) {
       <div><span>${st.key === 'notice' ? '공고일' : st.key === 'done' ? '당첨발표' : '주요 일정'}</span><b>${fmtDate(st.until)}</b></div>
     </div>
     <div class="reasons">${a.reasons.slice(0, 3).map((r) => `<span class="reason${r.neg ? ' neg' : ''}">${esc(r.t)}</span>`).join('')}</div>`;
+  if (a.income?.verdict === 'over') c.classList.add('dim');
   c.onclick = (e) => {
     const id = e.target.closest('[data-scrap]')?.dataset.scrap;
     if (id) { e.stopPropagation(); toggleScrap(id); return; }
@@ -786,6 +817,7 @@ async function load(refresh = false) {
   }
 
   if (Array.isArray(data.corners) && data.corners.length) CORNERS = data.corners;
+  if (data.incomeStandard?.base) INCOME_STD = data.incomeStandard;
   if (data.watch && !localStorage.getItem('cheongyak.watch')) watchCfg = { ...DEFAULT_WATCH, ...data.watch };
   listings = data.listings || [];
   meta = data;
@@ -954,6 +986,7 @@ $('#fSort').onchange = (e) => { filters.sort = e.target.value; renderCards(); };
 $('#fBudget').onchange = (e) => { filters.budgetOnly = e.target.checked; renderCards(); };
 $('#fEligible').onchange = (e) => { filters.eligibleOnly = e.target.checked; renderCards(); };
 $('#fAnnounce').onchange = (e) => { filters.showAnnouncements = e.target.checked; renderAll(); };
+$('#fIncomeFit').onchange = (e) => { filters.incomeFitOnly = e.target.checked; renderCards(); };
 let searchTimer = null;
 $('#fSearch').oninput = (e) => {
   filters.q = e.target.value;
