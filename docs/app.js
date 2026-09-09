@@ -635,17 +635,20 @@ function drawerHTML(l, a) {
     ${l.flags?.regulated ? '<span class="badge hot">조정대상지역</span>' : ''}
   </div>
 
-  ${a.income && a.income.verdict !== 'unknown' ? `<section>
+  ${a.income?.verdict === 'nolimit' ? `<section>
+    <h3>소득 · 자산 기준</h3>
+    <p class="lead small"><span class="verdict ok">기준 없음</span> &nbsp; ${esc(a.income.note ?? '')}</p>
+  </section>` : ''}
+
+  ${a.income && a.income.verdict !== 'unknown' && a.income.verdict !== 'nolimit' ? `<section>
     <h3>소득 · 자산 기준</h3>
     <p class="lead small">
       <span class="verdict ${a.income.verdict}">${a.income.verdict === 'ok' ? '기준 이내' : a.income.verdict === 'tight' ? '아슬아슬' : '초과'}</span>
       &nbsp; ${a.income.bySolo ? '본인 소득' : '세대 소득'} <b>${a.income.myPercent}%</b> · ${esc(a.income.rule ?? '')} 기준 <b>${a.income.thresholdPercent}%</b>
       ${a.income.thresholdWon ? `(월 ${a.income.thresholdWon.toLocaleString('ko-KR')}원)` : ''}
       ${a.income.assetOver ? `<br><b>${esc(a.income.assetOver)} 한도를 넘습니다.</b>` : ''}
-      ${a.income.byYouth ? `<br><span class="fineprint">${a.income.householdVerdict
-        ? `세대 합산으로는 ${a.income.householdVerdict.myPercent}%로 기준을 넘지만, 청년 계층(본인 소득)으로 신청하면 들어옵니다.`
-        : '청년 계층(본인 소득) 기준으로 계산했습니다.'}</span>` : ''}
-      ${a.income.solo && a.income.solo.verdict !== 'unknown' ? `<br><span class="fineprint">청년 계층(본인 소득) 기준으로는 ${a.income.solo.myPercent}% — ${a.income.solo.verdict === 'over' ? '초과' : '기준 이내'}</span>` : ''}
+      ${a.income.bySolo ? '<br><span class="fineprint">이 유형의 청년 계층은 본인 소득만 보므로 1인가구 기준으로 계산했습니다.</span>' : ''}
+      ${a.income.assetLimit != null ? `<br><span class="fineprint">${a.income.assetBySolo ? '본인' : '세대'} 총자산 한도 ${a.income.assetLimit.toLocaleString('ko-KR')}만원${a.income.carLimit ? ` · 자동차 ${a.income.carLimit.toLocaleString('ko-KR')}만원` : ''}</span>` : ''}
     </p>
     ${a.income.note ? `<p class="fineprint">${esc(a.income.note)}</p>` : ''}
     <p class="fineprint">${STD?.urban?.year ?? ''}년 공표 기준(${esc(a.income.basis ?? '')})으로 계산했습니다. 공고마다 우선공급 계층·면적별 예외가 있으니 최종 자격은 공고문을 확인하세요.
