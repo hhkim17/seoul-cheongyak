@@ -161,3 +161,43 @@ export async function scrapeHug() {
   }
   return out;
 }
+
+// ── 도시근로자 가구원수별 월평균소득 기준표 ─────────────────────────
+// SH가 공표 표를 웹으로 올려 둔다. 매년 3월 통계청 발표 후 갱신되므로
+// 숫자를 코드에 박지 않고 여기서 읽어 온다.
+const SH_INCOME_URL = 'https://www.i-sh.co.kr/app/lay2/S48T1587C589/contents.do/';
+
+/**
+ * 표에는 70·80·90·105… 처럼 일부 비율만 실린다.
+ * 어떤 비율이든 계산할 수 있게 100% 기준액을 역산해 둔다.
+ * 반환: { year, base: { 1: 원, 2: 원, … }, source }
+ */
+export async function scrapeIncomeStandard() {
+  const html = await get(SH_INCOME_URL);
+  const year = (html.match(/(20\d{2})\s*년\s*도시근로자/) || [])[1] || null;
+
+  const rows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => cellsOf(m[1]));
+  const header = rows.find((c) => c.some((x) => /1인\s*가구/.test(x)));
+  if (!header) throw new Error('소득 기준표를 찾지 못했습니다');
+  // 헤더에서 '3인가구' → 3 처럼 가구원수를 뽑는다
+  const sizes = header.map((h) => Number((h.match(/(\d+)\s*인/) || [])[1]) || null);
+
+  const base = {};
+  for (const cells of rows) {
+    const pct = Number((String(cells[0]).match(/^(\d+)\s*%/) || [])[1]);
+    if (!pct) continue;
+    cells.forEach((v, i) => {
+      const size = sizes[i];
+      const won = Number(String(v).replace(/[^0-9]/g, ''));
+      if (!size || !won) return;
+      const hundred = Math.round((won / pct) * 100);
+      // 여러 행에서 역산한 값이 조금씩 어긋날 수 있어 평균을 낸다
+      (base[size] ||= []).push(hundred);
+    });
+  }
+  const avg = (a) => Math.round(a.reduce((x, y) => x + y, 0) / a.length);
+  const table = Object.fromEntries(Object.entries(base).map(([k, v]) => [k, avg(v)]));
+  if (!Object.keys(table).length) throw new Error('소득 기준표를 해석하지 못했습니다');
+
+  return { year, base: table, source: SH_INCOME_URL, fetchedAt: Date.now() };
+}
