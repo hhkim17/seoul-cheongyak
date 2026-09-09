@@ -92,6 +92,9 @@
       <label class="toggle">
         <input type="checkbox" id="fAnnounce"> 당첨자 발표·안내도 보기
       </label>
+      <label class="toggle">
+        <input type="checkbox" id="fIncomeFit"> 소득·자산 초과는 빼고 보기
+      </label>
       <button id="fReset" class="ghost small">필터 초기화</button>
     </aside>
 
@@ -228,6 +231,25 @@
           <li>본인·배우자가 집을 소유한 적이 있으면 <b>판 뒤 무주택이 된 날</b>부터 다시 셉니다 — 위 칸에 그 날짜를 넣으세요.</li>
         </ul>
         <p>정확한 판정은 <a href="https://www.applyhome.co.kr/ap/apa/selectSbscrptPnttCalculationView.do" target="_blank" rel="noopener">청약홈 가점 계산기</a>와 모집공고문을 확인하세요.</p>
+      </details>
+    </fieldset>
+
+    <fieldset>
+      <legend>소득 · 자산 <span class="hint">(공공임대·공공분양 자격 계산용)</span></legend>
+      <div class="grid3">
+        <label class="field"><span>가구 월평균소득 (만원)</span><input id="pIncome" type="number" min="0" step="10" placeholder="세전, 세대 합산"></label>
+        <label class="field"><span>총자산 (만원)</span><input id="pAsset" type="number" min="0" step="100" placeholder="부채 뺀 금액"></label>
+        <label class="field"><span>자동차가액 (만원)</span><input id="pCar" type="number" min="0" step="100" placeholder="없으면 0"></label>
+      </div>
+      <div id="incomeOut" class="score-out"></div>
+      <details class="help">
+        <summary>이 숫자는 어디에 쓰이나요?</summary>
+        <ul>
+          <li>공고 유형마다 소득 기준이 다릅니다 — <b>행복주택은 100%</b>(1인가구 120%·2인가구 110%), <b>국민임대는 70%</b>(1인가구 90%·2인가구 80%) 이하입니다.</li>
+          <li>가구원수는 <b>부양가족 수 + 본인</b>으로 계산합니다. 기준표는 매년 공표되는 값을 자동으로 가져옵니다.</li>
+          <li><b>총자산 한도는 신청 계층마다 다릅니다.</b> 청년 2억 5,100만원, 대학생 1억 800만원, 그 밖은 3억 4,500만원. 자동차는 공통 4,542만원입니다. 계층은 생년월과 특별공급 선택으로 짐작합니다.</li>
+          <li>기준을 확인하지 못한 유형은 <b>판정하지 않고</b> 넘어갑니다. 최종 판단은 언제나 모집공고문입니다.</li>
+        </ul>
       </details>
     </fieldset>
 

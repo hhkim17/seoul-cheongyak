@@ -250,3 +250,15 @@ details.help p { margin: 6px 0 0; font-size: 12px; color: var(--text-3); }
 }
 .searchbar input::placeholder { color: var(--text-3); }
 mark { background: color-mix(in srgb, var(--warn) 35%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* 소득·자산 판정 */
+.verdict { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 1px solid transparent; }
+.verdict.ok    { background: #143a2b; color: #4fd3a0; border-color: #1f6047; }
+.verdict.tight { background: #40320f; color: #f0c15c; border-color: #6b5518; }
+.verdict.over  { background: #43201d; color: #ff8d84; border-color: #6e322c; }
+@media (prefers-color-scheme: light) {
+  .verdict.ok    { background: #e4f7ee; color: #1a7a53; border-color: #a8e0c8; }
+  .verdict.tight { background: #fdf3dd; color: #8a6412; border-color: #ecd28f; }
+  .verdict.over  { background: #fdeae8; color: #b03127; border-color: #f3b8b2; }
+}
+.card.dim { opacity: .5; }
