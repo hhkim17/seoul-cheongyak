@@ -66,6 +66,10 @@ let STD = null;   // { urban: {year, base}, median: {year, base} }
 const householdSize = () => Math.max(1, (Number(profile.family) || 0) + 1);
 const myAgeYears = () => (profile.birthYm ? Math.floor(yearsBetween(`${profile.birthYm}-01`) ?? 0) : null);
 
+// 임대 공고는 분양가가 아니라 보증금·월세로 읽어야 한다
+const RENTAL_KINDS = ['RENT', 'LH_RENT', 'LH_WELFARE', 'MYHOME_RENT', 'SH', 'HUG'];
+const isRental = (l) => RENTAL_KINDS.includes(l.kind);
+
 // 코너 판정은 서버가 붙여 주는 corner를 그대로 쓰고, 없을 때만 kind로 되짚는다
 const cornerOf = (l) => l.corner || CORNERS.find((c) => c.kinds.includes(l.kind))?.key || 'etc';
 const agencyOf = (l) => l.agency || '민간·기타';
