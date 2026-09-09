@@ -60,48 +60,29 @@ const DEFAULT_CORNERS = [
   { key: 'etc', label: '기타', icon: '🗂️', kinds: [], desc: '위 유형으로 나누기 어려운 공고입니다.' },
 ];
 let CORNERS = DEFAULT_CORNERS;
-let INCOME_STD = null;   // { year, base: {가구원수: 100% 월소득(원)} }
+let STD = null;   // { urban: {year, base}, median: {year, base} }
 
 /** 가구원수 = 부양가족 + 본인 */
 const householdSize = () => Math.max(1, (Number(profile.family) || 0) + 1);
 const myAgeYears = () => (profile.birthYm ? Math.floor(yearsBetween(`${profile.birthYm}-01`) ?? 0) : null);
 
-/** 이 공고에 대해 내 소득·자산이 어디쯤인지 */
+/** 이 공고에 대해 내 소득·자산이 어디쯤인지 — 유형별 규칙은 standards.js가 가진다 */
 function incomeCheck(l) {
-  if (!INCOME_STD) return { verdict: 'unknown' };
-  if (profile.incomeManwon == null && profile.soloIncomeManwon == null) return { verdict: 'unknown' };
-  const corner = cornerOf(l);
-  const tier = Std.guessTier({ ageYears: myAgeYears(), special: profile.special });
-  const common = { corner, totalAssetManwon: profile.assetManwon, carManwon: profile.carManwon, tier, base: INCOME_STD.base };
-
-  // 세대 합산을 안 넣었으면 그 기준으로는 판정하지 않는다
-  const household = profile.incomeManwon != null
-    ? Std.evaluate({ ...common, income: profile.incomeManwon * 10000, household: householdSize() })
-    : { verdict: 'unknown' };
-
-  // 청년 계층은 본인 소득만 보는 유형이 있다 — 그 경우 1인가구 기준으로 따로 계산해 함께 보여준다
-  const age = myAgeYears();
-  const canSolo = Std.SOLO_INCOME_CORNERS.has(corner)
-    && profile.soloIncomeManwon != null
-    && age != null && age >= 19 && age <= 39;
-  const solo = canSolo
-    ? Std.evaluate({ ...common, income: profile.soloIncomeManwon * 10000, household: 1 })
-    : null;
-
-  // 청년 기준으로 통과하면 그쪽을 앞세운다 (더 유리한 신청 경로이므로).
-  // 세대 합산을 아예 안 넣은 경우에도 청년 기준만으로 판정한다.
-  if (solo && solo.verdict !== 'over' && household.verdict !== 'ok' && household.verdict !== 'tight') {
-    return { ...solo, byYouth: true, householdVerdict: household.verdict === 'unknown' ? null : household };
-  }
-  return { ...household, solo };
+  if (!STD) return { verdict: 'unknown' };
+  const has = profile.incomeManwon != null || profile.soloIncomeManwon != null;
+  if (!has) return { verdict: 'unknown' };
+  return Std.evaluate(l, {
+    householdIncome: profile.incomeManwon != null ? profile.incomeManwon * 10000 : null,
+    soloIncome: profile.soloIncomeManwon != null ? profile.soloIncomeManwon * 10000 : null,
+    householdAsset: profile.assetManwon,
+    soloAsset: profile.soloAssetManwon,
+    realEstate: profile.realEstateManwon,
+    car: profile.carManwon,
+    dualIncome: profile.dualIncome,
+    household: householdSize(),
+    tier: Std.guessTier({ ageYears: myAgeYears(), special: profile.special }),
+  }, STD);
 }
-
-// 임대 공고는 분양가가 아니라 보증금·월세로 읽어야 한다
-const RENTAL_KINDS = ['RENT', 'LH_RENT', 'LH_WELFARE', 'MYHOME_RENT', 'SH', 'HUG'];
-const isRental = (l) => RENTAL_KINDS.includes(l.kind);
-// 코너 판정은 서버가 붙여 주는 corner를 그대로 쓰고, 없을 때만 kind로 되짚는다
-const cornerOf = (l) => l.corner || CORNERS.find((c) => c.kinds.includes(l.kind))?.key || 'etc';
-const agencyOf = (l) => l.agency || '민간·기타';
 
 const STATUSES = [
   { key: 'live', label: '접수중' },
@@ -193,7 +174,8 @@ function statusOf(l) {
 // ── 프로필 ───────────────────────────────────────────────────────────
 const DEFAULT_PROFILE = {
   birthYm: '', marriageDate: '', noHouseSince: '', accountYm: '', family: 0,
-  incomeManwon: null, soloIncomeManwon: null, assetManwon: null, carManwon: null,
+  incomeManwon: null, soloIncomeManwon: null, assetManwon: null, soloAssetManwon: null,
+  realEstateManwon: null, carManwon: null, dualIncome: false,
   budgetEok: 9, areaMin: 49, areaMax: 99,
   special: [], gu: [], seoulResident: true,
 };
@@ -900,7 +882,7 @@ async function load(refresh = false) {
   }
 
   if (Array.isArray(data.corners) && data.corners.length) CORNERS = data.corners;
-  if (data.incomeStandard?.base) INCOME_STD = data.incomeStandard;
+  if (data.standards) STD = data.standards;
   if (data.watch && !localStorage.getItem('cheongyak.watch')) watchCfg = { ...DEFAULT_WATCH, ...data.watch };
   listings = data.listings || [];
   meta = data;
