@@ -41,19 +41,25 @@ function parseKoreanDate(raw, fallbackYear) {
   return null;
 }
 
-// SH 공고 본문은 '■ 청약신청 일정 ○ [1순위] 2026. 9. 14.( 월 ) 10:00 ~ …' 처럼
-// 항목 기호와 띄어쓰기가 뒤섞여 있다. 구간을 잘라 그 안의 날짜를 모두 모아 최소~최대를 쓴다.
-const SCHEDULE_KEY = /(청약\s?신청\s?일정|청약\s?일정|접수\s?일정|신청\s?일정|접수\s?기간|신청\s?기간|모집\s?기간|접수\s?일시|신청\s?일시|모집\s?신청일)/g;
+// SH 공고 본문은 '■ 접수일 ○ 인터넷 접수 : 2026. 9. 9.( 수 ) 10:00 ~ 9. 11.( 금 ) 17:00'
+// 처럼 항목 기호·요일·시각이 섞이고, 뒤쪽 날짜는 연도를 생략한다.
+// 일정 구간을 통째로 잘라 그 안의 날짜를 모두 모으고, 최소~최대를 접수기간으로 본다.
+const SCHEDULE_KEY = /(청약\s?신청\s?일정|청약\s?일정|접수\s?일정|신청\s?일정|접수\s?기간|신청\s?기간|모집\s?기간|접수\s?일시|신청\s?일시|모집\s?신청일|접수일)/g;
 const RESULT_KEY = /당첨자\s?발표/;
-const ANY_DATE = /(20\d{2})\s*[.\-년]\s*(\d{1,2})\s*[.\-월]\s*(\d{1,2})/g;
+// 연도는 생략될 수 있다. 시각(10:00)과 섞이지 않도록 끝에 '.' 또는 '일'을 요구한다.
+const ANY_DATE = /(?:(20\d{2})\s*[.\-년]\s*)?(\d{1,2})\s*[.\-월]\s*(\d{1,2})\s*[.일]/g;
 const SECTION_END = /[■□▣]/;
 
-/** 구간 안의 모든 날짜를 ISO로 모은다 */
-function datesIn(text) {
+/** 구간 안의 날짜를 ISO로 모은다. 연도가 없으면 앞서 나온 연도를 잇는다. */
+function datesIn(text, defaultYear) {
   const out = [];
+  let year = defaultYear;
   for (const m of text.matchAll(ANY_DATE)) {
-    const iso = `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
-    if (Number(m[2]) >= 1 && Number(m[2]) <= 12 && Number(m[3]) >= 1 && Number(m[3]) <= 31) out.push(iso);
+    if (m[1]) year = m[1];
+    const mo = Number(m[2]);
+    const day = Number(m[3]);
+    if (!year || mo < 1 || mo > 12 || day < 1 || day > 31) continue;
+    out.push(`${year}-${pad(mo)}-${pad(day)}`);
   }
   return out;
 }
@@ -61,32 +67,38 @@ function datesIn(text) {
 /** 키워드 다음부터 다음 항목 기호(■)까지를 한 구간으로 본다 */
 function sectionAfter(text, index, max = 420) {
   const raw = text.slice(index, index + max);
-  const stop = raw.slice(30).search(SECTION_END);   // 키워드 바로 뒤의 기호는 건너뛴다
-  return stop >= 0 ? raw.slice(0, stop + 30) : raw;
+  const stop = raw.slice(20).search(SECTION_END);   // 키워드 바로 뒤의 기호는 건너뛴다
+  return stop >= 0 ? raw.slice(0, stop + 20) : raw;
 }
 
 /**
  * SH 상세 본문에서 청약 접수기간과 당첨자 발표일을 찾는다.
- * 첨부 공고문(PDF)에만 있는 공고도 있어 못 찾으면 null을 준다 — 일정을 지어내지 않는다.
+ * 날짜가 둘 이상 있는 구간(시작~종료가 분명한 곳)을 우선한다.
+ * 첨부 공고문(PDF)에만 일정이 있는 공고도 있어, 못 찾으면 null을 준다 — 지어내지 않는다.
  */
 export function extractPeriod(text) {
-  let period = null;
+  const yearHint = (text.match(/모집\s?공고일\s*:?\s*(20\d{2})/) || text.match(/(20\d{2})/) || [])[1];
+
+  const candidates = [];
   for (const m of text.matchAll(SCHEDULE_KEY)) {
-    const dates = datesIn(sectionAfter(text, m.index));
-    if (!dates.length) continue;
-    const from = dates.reduce((a, b) => (a < b ? a : b));
-    const to = dates.reduce((a, b) => (a > b ? a : b));
-    period = { from, to };
-    break;
+    const dates = datesIn(sectionAfter(text, m.index), yearHint);
+    if (dates.length) candidates.push(dates);
   }
+  const best = candidates.find((d) => new Set(d).size >= 2) || candidates[0];
 
   let resultDate = null;
   const r = text.search(RESULT_KEY);
   if (r >= 0) {
-    const d = datesIn(text.slice(r, r + 120));
+    const d = datesIn(text.slice(r, r + 120), yearHint);
     if (d.length) resultDate = d[0];
   }
-  return period ? { ...period, resultDate } : (resultDate ? { resultDate } : null);
+
+  if (!best) return resultDate ? { resultDate } : null;
+  return {
+    from: best.reduce((a, b) => (a < b ? a : b)),
+    to: best.reduce((a, b) => (a > b ? a : b)),
+    resultDate,
+  };
 }
 
 /** 모집공고의 상세 페이지를 열어 접수기간을 채운다 (건수가 적어 부담이 크지 않다) */
