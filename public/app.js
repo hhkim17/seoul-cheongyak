@@ -763,7 +763,11 @@ function updateIncomeOut() {
   const pct = Math.round(won / base * 100);
   const tier = Std.guessTier({ ageYears: myAgeYears(), special: profile.special });
   const limits = Std.ASSET_LIMITS[tier] ?? Std.ASSET_LIMITS['일반'];
-  box.innerHTML = `내 소득은 ${size}인가구 기준 <b>약 ${pct}%</b>
+  const solo = Number($('#pSolo').value) * 10000;
+  const soloLine = solo && INCOME_STD.base[1]
+    ? `<br>청년 계층(본인 소득) 기준으로는 <b>약 ${Math.round(solo / INCOME_STD.base[1] * 100)}%</b> — 행복주택 청년은 1인가구 120% 이내`
+    : '';
+  box.innerHTML = `내 소득은 ${size}인가구 기준 <b>약 ${pct}%</b>${soloLine}
     <span class="sub">${INCOME_STD.year}년 기준 100% = ${base.toLocaleString('ko-KR')}원 ·
     행복주택 ${size === 1 ? 120 : size === 2 ? 110 : 100}% 이내 / 국민임대 ${size === 1 ? 90 : size === 2 ? 80 : 70}% 이내<br>
     자산 한도(${esc(tier)}): 총자산 ${limits.total.toLocaleString('ko-KR')}만원 · 자동차 ${limits.car.toLocaleString('ko-KR')}만원</span>`;
