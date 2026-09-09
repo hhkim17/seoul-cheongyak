@@ -148,7 +148,7 @@ export async function collectListings(key) {
   }
 
   const listings = [...byTitle.values()]
-    .map((l) => ({ ...l, corner: N.cornerOf(l.kind) }))
+    .map((l) => ({ ...l, corner: N.cornerOf(l) }))
     .sort((a, b) => (b.noticeDate || '').localeCompare(a.noticeDate || ''));
 
   log(`수집 완료: 서울 ${listings.length}건`);

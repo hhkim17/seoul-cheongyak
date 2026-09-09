@@ -214,6 +214,8 @@ export const CORNERS = [
     desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
   { key: 'lhsale',     label: '공공분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE', 'MYHOME_SALE'],
     desc: 'LH·SH·지방공사가 공급하는 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
+  { key: 'happy',      label: '행복주택',           icon: '🌤️', kinds: [],
+    desc: '청년·신혼부부·대학생을 위한 임대주택. 시세보다 싸고 최장 6~10년 살 수 있습니다. LH·SH 공고를 함께 모았습니다.' },
   { key: 'lhrent',     label: '공공임대주택',       icon: '🏠', kinds: ['LH_RENT', 'MYHOME_RENT'],
     desc: '행복주택·국민임대·영구임대·통합공공임대·매입/전세임대. 소득·자산 기준으로 뽑고, 부모님이 60세 이상이어도 유주택으로 봅니다.' },
   { key: 'sh',         label: 'SH 서울주택도시공사', icon: '🏙️', kinds: ['SH'],
@@ -238,7 +240,17 @@ export function classifyNotice(title, fallback = '안내') {
   return fallback;
 }
 
-export const cornerOf = (kind) => CORNERS.find((c) => c.kinds.includes(kind))?.key || 'apt';
+/** 임대 계열에서만 행복주택을 따로 뽑는다 — 신혼희망타운 행복주택은 그쪽 코너에 둔다 */
+const HAPPY_KINDS = new Set(['LH_RENT', 'MYHOME_RENT', 'SH']);
+export const isHappyHouse = (l) =>
+  HAPPY_KINDS.has(l.kind) && /행복주택/.test(`${l.kindLabel ?? ''} ${l.subType ?? ''} ${l.name ?? ''}`);
+
+/** 공고 하나가 어느 코너에 속하는지. 문자열(kind)만 줘도 동작한다. */
+export function cornerOf(listingOrKind) {
+  const l = typeof listingOrKind === 'string' ? { kind: listingOrKind } : listingOrKind;
+  if (isHappyHouse(l)) return 'happy';
+  return CORNERS.find((c) => c.kinds.includes(l.kind))?.key || 'apt';
+}
 
 // ── LH 공고 정규화 ───────────────────────────────────────────────────
 // LH 응답 필드명이 문서와 실제가 조금씩 다른 경우가 있어 후보 키를 순서대로 본다.
