@@ -204,52 +204,79 @@ export function normalizeUrbtyModel(m) {
 // ── 코너(공급 유형 묶음) ─────────────────────────────────────────────
 // 화면 상단 탭이자, 각 공고가 어느 제도에 속하는지를 나타내는 분류.
 export const CORNERS = [
+  // ── 분양 계열 ──
   { key: 'apt',        label: '아파트 분양',        icon: '🏢', kinds: ['APT'],
     desc: '민영·국민주택 일반분양. 청약통장과 가점이 필요합니다.' },
   { key: 'remnant',    label: '무순위·잔여세대',    icon: '🎯', kinds: ['REMNDR'],
     desc: '미계약·부적격 물량 재공급. 가점 없이 추첨이라 통장이 약해도 노려볼 수 있습니다.' },
   { key: 'officetel',  label: '오피스텔·도시형',    icon: '🏬', kinds: ['URBTY'],
     desc: '오피스텔·도시형생활주택·생활형숙박시설. 청약통장 없이 추첨으로 뽑습니다.' },
-  { key: 'publicrent', label: '공공지원 민간임대',  icon: '🤝', kinds: ['RENT'],
-    desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
   { key: 'lhsale',     label: '공공분양·신혼희망타운', icon: '🌱', kinds: ['LH_SALE', 'MYHOME_SALE'],
     desc: 'LH·SH·지방공사가 공급하는 공공분양과 신혼희망타운. 소득·자산 요건이 붙습니다.' },
+
+  // ── 임대 계열 (기관이 아니라 유형으로 나눈다) ──
   { key: 'happy',      label: '행복주택',           icon: '🌤️', kinds: [],
-    desc: '청년·신혼부부·대학생을 위한 임대주택. 시세보다 싸고 최장 6~10년 살 수 있습니다. LH·SH 공고를 함께 모았습니다.' },
-  { key: 'lhrent',     label: '공공임대주택',       icon: '🏠', kinds: ['LH_RENT', 'MYHOME_RENT'],
-    desc: '행복주택·국민임대·영구임대·통합공공임대·매입/전세임대. 소득·자산 기준으로 뽑고, 부모님이 60세 이상이어도 유주택으로 봅니다.' },
-  { key: 'sh',         label: 'SH 서울주택도시공사', icon: '🏙️', kinds: ['SH'],
-    desc: '장기전세·청년안심주택·행복주택·매입임대·미리내집 등. SH는 공고 API가 없어 공고 게시판을 직접 읽어옵니다 — 일정·조건은 공고 원문을 확인하세요.' },
+    desc: '청년·신혼부부·대학생 대상 임대주택. 시세보다 싸고 최장 6~10년 살 수 있습니다.' },
+  { key: 'longterm',   label: '장기전세',           icon: '🏘️', kinds: [],
+    desc: '보증금만 내고 최장 20년까지 사는 SH 장기전세주택(시프트).' },
+  { key: 'youth',      label: '청년안심주택',       icon: '🧑‍🎓', kinds: [],
+    desc: '역세권 청년주택. 청년·신혼부부가 시세보다 싸게 삽니다.' },
+  { key: 'purchase',   label: '매입임대',           icon: '🏡', kinds: [],
+    desc: '기존 주택을 공사가 사들여 다시 빌려주는 방식. 미리내집·도전숙도 여기 들어갑니다.' },
+  { key: 'jeonsae',    label: '전세임대',           icon: '🔑', kinds: [],
+    desc: '내가 살 집을 고르면 공사가 집주인과 전세계약을 맺고 다시 빌려줍니다.' },
+  { key: 'social',     label: '사회주택',           icon: '🏚️', kinds: [],
+    desc: '사회적경제 주체가 운영하는 임대주택. 두레주택·희망하우징 포함.' },
+  { key: 'publichome', label: '공공임대',           icon: '🏠', kinds: ['LH_RENT', 'MYHOME_RENT'],
+    desc: '국민임대·영구임대·통합공공임대·재개발임대. 소득·자산 기준으로 뽑습니다.' },
+  { key: 'publicrent', label: '공공지원 민간임대',  icon: '🤝', kinds: ['RENT'],
+    desc: '시세보다 낮은 임대료로 8~10년 거주. 청년·신혼부부 우선공급이 있습니다.' },
   { key: 'hug',        label: 'HUG 든든전세',       icon: '🛡️', kinds: ['HUG'],
-    desc: 'HUG가 전세보증금을 대신 갚고 매입한 주택을 공공임대로 공급합니다. 소득·자산 기준이 없고 무주택세대구성원이면 신청할 수 있습니다.' },
+    desc: 'HUG가 전세보증금을 대신 갚고 매입한 주택. 소득·자산 기준이 없습니다.' },
   { key: 'welfare',    label: '주거복지',           icon: '💚', kinds: ['LH_WELFARE'],
     desc: '주거취약계층·고령자 등 대상 주거지원 공고.' },
+  { key: 'etc',        label: '기타',               icon: '🗂️', kinds: [],
+    desc: '위 유형으로 나누기 어려운 공고입니다.' },
 ];
 
-/**
- * 공고 제목으로 성격을 가른다.
- *  모집 — 입주자를 뽑는 공고 (정정공고 포함)
- *  발표 — 당첨자·서류심사대상자 발표, 동호배정, 계약 안내 등 이미 끝난 건의 후속
- *  안내 — 그 밖의 공지
- * 청약홈 공고는 제목이 단지명뿐이라 분류하지 않고 '모집'으로 둔다.
- */
-export function classifyNotice(title, fallback = '안내') {
-  const t = String(title || '');
-  if (/(당첨자|서류\s*심사|합격자|입주\s*대상자|대상자\s*발표|예비자\s*발표|명단\s*발표|동호\s*배정|사전\s*방문|계약\s*안내|입주\s*안내|결과\s*발표|추첨\s*결과)/.test(t)) return '발표';
-  if (/(모집|공급\s*공고|청약\s*접수|입주자\s*선정)/.test(t)) return '모집';
-  return fallback;
-}
+/** 유형을 글로 판정해야 하는 출처 — 청약홈 분양 공고는 kind만으로 충분하다 */
+const TYPED_KINDS = new Set(['LH_RENT', 'MYHOME_RENT', 'SH', 'LH_WELFARE']);
 
-/** 임대 계열에서만 행복주택을 따로 뽑는다 — 신혼희망타운 행복주택은 그쪽 코너에 둔다 */
-const HAPPY_KINDS = new Set(['LH_RENT', 'MYHOME_RENT', 'SH']);
-export const isHappyHouse = (l) =>
-  HAPPY_KINDS.has(l.kind) && /행복주택/.test(`${l.kindLabel ?? ''} ${l.subType ?? ''} ${l.name ?? ''}`);
+/** 앞에 있는 규칙이 이긴다 — 좁은 유형부터 본다 */
+const TYPE_RULES = [
+  ['happy',    /행복주택/],
+  ['longterm', /장기전세/],
+  ['youth',    /청년안심|역세권\s*청년/],
+  ['jeonsae',  /전세임대/],
+  ['purchase', /매입임대|미리내집|도전숙|재개발임대|장기안심/],
+  ['social',   /사회주택|두레주택|희망하우징/],
+  ['publichome', /국민임대|영구임대|통합공공임대|공공임대/],
+];
 
-/** 공고 하나가 어느 코너에 속하는지. 문자열(kind)만 줘도 동작한다. */
 export function cornerOf(listingOrKind) {
   const l = typeof listingOrKind === 'string' ? { kind: listingOrKind } : listingOrKind;
-  if (isHappyHouse(l)) return 'happy';
-  return CORNERS.find((c) => c.kinds.includes(l.kind))?.key || 'apt';
+
+  // 청약홈 분양 계열과 HUG·공공지원임대는 종류가 곧 유형이다
+  const byKind = CORNERS.find((c) => c.kinds.includes(l.kind));
+  if (byKind && !TYPED_KINDS.has(l.kind)) return byKind.key;
+
+  if (TYPED_KINDS.has(l.kind)) {
+    const text = `${l.kindLabel ?? ''} ${l.subType ?? ''} ${l.name ?? ''}`;
+    for (const [key, re] of TYPE_RULES) if (re.test(text)) return key;
+    if (l.kind === 'LH_WELFARE') return 'welfare';
+    return 'etc';
+  }
+  return byKind?.key || 'apt';
+}
+
+/** 공급기관 — 코너와 별개로 걸러 볼 수 있게 한다 */
+export function agencyOf(l) {
+  const t = `${l.source ?? ''} ${l.developer ?? ''}`;
+  if (/\bSH\b|서울주택도시/.test(t)) return 'SH';
+  if (/\bLH\b|한국토지주택/.test(t)) return 'LH';
+  if (/HUG|주택도시보증/.test(t)) return 'HUG';
+  if (/경기주택|GH/.test(t)) return 'GH';
+  return '민간·기타';
 }
 
 // ── LH 공고 정규화 ───────────────────────────────────────────────────
