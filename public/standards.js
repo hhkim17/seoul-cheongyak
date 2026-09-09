@@ -1,58 +1,107 @@
-// 공공임대·공공분양의 소득·자산 기준
+// 공공임대·공공분양의 소득·자산 기준 (2026년 적용)
 //
-// 원칙: 확인한 기준만 단정하고, 확실하지 않으면 판정하지 않는다.
-// 부적격 당첨은 당첨 취소와 재당첨 제한으로 이어지므로, 틀린 '가능' 표시의 대가가 크다.
-// 최종 판단은 언제나 모집공고문이다.
+// 원칙
+//  1. 기관 공식 안내에서 직접 확인한 기준만 판정에 쓴다.
+//  2. 확인하지 못한 유형은 '통과'라고 말하지 않는다. 넘는 게 분명할 때만 경고한다.
+//  3. 최종 판단은 언제나 모집공고문이다. 부적격 당첨은 당첨 취소로 이어진다.
+//
+// 기준액은 코드에 박지 않는다. 도시근로자 월평균소득은 SH 공표표에서,
+// 기준 중위소득은 LH 통합공공임대 안내에서 매년 읽어 온다.
 
-/** 출처를 함께 남겨 화면에서 근거를 보여줄 수 있게 한다 */
 export const SOURCES = {
-  income: 'https://www.i-sh.co.kr/app/lay2/S48T1587C589/contents.do/',
   happy: 'https://apply.lh.or.kr/lhapply/cm/cntnts/cntntsView.do?mi=1201663&cntntsId=1201391',
   national: 'https://apply.lh.or.kr/lhapply/cm/cntnts/cntntsView.do?mi=1144&cntntsId=1023',
+  unified: 'https://apply.lh.or.kr/lhapply/cm/cntnts/cntntsView.do?mi=1201585&cntntsId=1201333',
+  longtermLH: 'https://apply.lh.or.kr/lhapply/cm/cntnts/cntntsView.do?mi=1232&cntntsId=1028',
+  publicSale: 'https://apply.lh.or.kr/lhapply/cm/cntnts/cntntsView.do?mi=1224&cntntsId=1111',
+  youthSafe: 'https://soco.seoul.go.kr/youth/pgm/home/yohome/supportYouth1.do?menuNo=400039',
+  longtermSH: 'https://www.i-sh.co.kr/app/lay2/S48T1587C589/contents.do/',
 };
 
-/** 자산 한도(만원). 같은 유형이라도 신청 계층에 따라 다르다. */
-export const ASSET_LIMITS = {
-  일반: { total: 34500, car: 4542 },
-  신혼부부: { total: 34500, car: 4542 },
-  고령자: { total: 34500, car: 4542 },
-  청년: { total: 25100, car: 4542 },
-  대학생: { total: 10800, car: 4542 },
-};
+/** 공고의 유형 이름으로 어떤 규칙을 쓸지 고른다. 코너보다 세밀하다. */
+export function ruleKeyOf(l) {
+  const t = `${l.kindLabel ?? ''} ${l.subType ?? ''} ${l.name ?? ''}`;
+  if (l.kind === 'HUG') return 'hugJeonse';
+  if (/청년안심|역세권\s*청년/.test(t)) return 'youthSafe';
+  if (/행복주택/.test(t)) return 'happy';
+  if (/통합공공임대/.test(t)) return 'unified';
+  if (/국민임대/.test(t)) return 'national';
+  if (/영구임대/.test(t)) return 'permanent';
+  if (/장기전세/.test(t)) return l.agency === 'SH' ? 'longtermSH' : 'longtermLH';
+  if (/공공분양|신혼희망타운|분양전환/.test(t)) return 'publicSale';
+  if (/매입임대|미리내집|전세임대|사회주택|두레주택|희망하우징/.test(t)) return 'caseByCase';
+  return null;
+}
 
 /**
- * 유형(코너)별 소득 기준. 단위는 도시근로자 가구원수별 월평균소득 대비 %.
- *  verified: LH·SH 공식 안내에서 직접 확인한 기준 — 판정에 쓴다
- *  ceiling : 확인하지 못한 유형의 '이보다 높으면 어디도 어렵다'는 상한 — 초과 경고에만 쓴다
+ * basis   — urban: 도시근로자 월평균소득 / median: 기준 중위소득 / none: 소득 기준 없음
+ * income  — pct 기본 비율, bySize 가구원수 예외, dual 맞벌이 신혼 완화
+ * soloTiers — 소득을 '본인 기준'으로 보는 계층
+ * assets  — 계층별 총자산 한도(만원). soloAsset 계층은 본인 자산으로 본다.
  */
-/**
- * 소득을 '본인 기준'으로 보는 계층이 있는 유형.
- * LH 행복주택 안내가 청년 계층에만 '해당세대(세대원은 본인 기준)'이라 적고 있어
- * 확인된 이 유형에만 적용한다. 청년안심주택 등은 공고마다 달라 넣지 않는다.
- */
-export const SOLO_INCOME_CORNERS = new Set(['happy']);
-
-export const INCOME_RULES = {
+export const RULES = {
   happy: {
-    verified: true, label: '행복주택',
-    base: 100, bySize: { 1: 120, 2: 110 },
-    note: '맞벌이 신혼부부는 120%(2인가구 130%)까지 인정되는 공고가 있습니다.',
-    source: SOURCES.happy,
+    label: '행복주택', verified: true, basis: 'urban', source: SOURCES.happy,
+    income: { pct: 100, bySize: { 1: 120, 2: 110 }, dual: 120 },
+    soloTiers: ['청년'],
+    assets: { 일반: 34500, 신혼부부: 34500, 고령자: 34500, 청년: 25100, 대학생: 10800 },
+    soloAssetTiers: ['청년', '대학생'],
+    car: 4542,
+    note: '청년 계층은 본인 소득만 봅니다. 대학생은 본인과 부모 소득을 합산합니다. 맞벌이 신혼부부는 120%까지 인정됩니다.',
   },
-  publichome: {
-    verified: true, label: '국민임대',
-    base: 70, bySize: { 1: 90, 2: 80 },
-    note: '통합공공임대는 도시근로자 소득이 아니라 기준 중위소득을 쓰므로 이 계산이 맞지 않습니다.',
-    source: SOURCES.national,
+  national: {
+    label: '국민임대', verified: true, basis: 'urban', source: SOURCES.national,
+    income: { pct: 70, bySize: { 1: 90, 2: 80 } },
+    assets: { 일반: 34500 }, car: 4542,
+    note: '전용 50㎡ 미만은 50% 이하에 우선 공급하는 공고가 있습니다.',
   },
-  longterm: { verified: false, label: '장기전세', ceiling: 150, note: '면적·유형에 따라 70~150%로 갈립니다. 공고문을 확인하세요.' },
-  purchase: { verified: false, label: '매입임대', ceiling: 150, note: '청년·신혼부부·일반 등 공급 계층마다 다릅니다.' },
-  jeonsae: { verified: false, label: '전세임대', ceiling: 150, note: '공급 계층마다 다릅니다.' },
-  youth: { verified: false, label: '청년안심주택', ceiling: 150, note: '공고마다 다릅니다.' },
-  lhsale: { verified: false, label: '공공분양·신혼희망타운', ceiling: 160, note: '신혼희망타운은 맞벌이 여부에 따라 달라집니다.' },
+  unified: {
+    label: '통합공공임대', verified: true, basis: 'median', source: SOURCES.unified,
+    income: { pct: 150, addPointsBySize: { 1: 20, 2: 10 }, priorityPct: 100 },
+    assets: { 일반: 34500 }, car: 4542,
+    note: '기준 중위소득으로 봅니다. 일반공급 150% 이하, 우선공급 100% 이하이며 1인 가구는 +20%p, 2인 가구는 +10%p 적용합니다.',
+  },
+  youthSafe: {
+    label: '청년안심주택', verified: true, basis: 'urban', source: SOURCES.youthSafe,
+    income: { pct: 120 },
+    assets: { 일반: 25100 }, soloAssetTiers: ['일반', '청년', '신혼부부', '고령자', '대학생'],
+    car: 4542,
+    note: '서울시 기준으로 본인 자산 2억 5,100만원 이하입니다. 소득 기준을 넘으면 공공지원민간임대 일반공급으로만 신청할 수 있습니다.',
+  },
+  longtermLH: {
+    label: '장기전세(LH)', verified: true, basis: 'urban', source: SOURCES.longtermLH,
+    income: { pct: 100 },
+    assets: { 일반: 34500 }, car: 4542,
+    note: '총자산 한도에 지역별 전세가격 계수가 곱해지므로 실제 한도는 조금 다를 수 있습니다.',
+  },
+  publicSale: {
+    label: '공공분양', verified: false, basis: 'urban', source: SOURCES.publicSale,
+    income: { ceiling: 160 },
+    assets: { 일반: 36200, 청년: 27600 }, soloAssetTiers: ['청년'],
+    realEstate: 21550, car: 4542,
+    note: '소득 기준은 공급 유형(일반·신혼희망타운·특별공급)마다 달라 판정하지 않습니다. 자산은 총자산 3억 6,200만원·부동산 2억 1,550만원 이하이며, 청년 특별공급은 본인 2억 7,600만원·부모 10억 3,500만원 기준입니다.',
+  },
+  longtermSH: {
+    label: '장기전세(SH)', verified: false, basis: 'urban', source: SOURCES.longtermSH,
+    income: { ceiling: 150 },
+    note: '면적과 유형에 따라 70~150%로 갈립니다. 공고문을 확인하세요.',
+  },
+  permanent: {
+    label: '영구임대', verified: false, basis: 'none',
+    note: '생계·의료급여 수급자 등 대상별 기준을 따릅니다. 소득 비율로 판정하지 않습니다.',
+  },
+  caseByCase: {
+    label: '매입·전세임대·사회주택', verified: false, basis: 'urban',
+    income: { ceiling: 150 },
+    note: '공급 계층(청년·신혼부부·고령자·일반)마다 기준이 크게 다릅니다. 공고문을 확인하세요.',
+  },
+  hugJeonse: {
+    label: 'HUG 든든전세', verified: true, basis: 'none',
+    note: '소득·자산 기준을 적용하지 않습니다. 무주택세대구성원이면 신청할 수 있습니다.',
+  },
 };
 
-/** 나이와 특별공급 체크로 신청 계층을 짐작한다 — 자산 한도가 계층별로 다르기 때문 */
+/** 나이와 특별공급 선택으로 신청 계층을 짐작한다 */
 export function guessTier({ ageYears, special = [] }) {
   if (special.includes('newlywed') || special.includes('newborn')) return '신혼부부';
   if (ageYears != null && ageYears >= 65) return '고령자';
@@ -61,39 +110,74 @@ export function guessTier({ ageYears, special = [] }) {
   return '일반';
 }
 
+const won = (manwon) => (manwon == null ? null : manwon * 10000);
+
 /**
- * 한 공고에 대해 내 소득·자산이 어디쯤인지 계산한다.
- *  income   : 월평균소득(원)
- *  household: 가구원수
- *  base     : scrapeIncomeStandard()가 준 가구원수별 100% 기준액
- * 반환 verdict — 'ok' 여유 | 'tight' 아슬아슬 | 'over' 초과 | 'unknown' 판정 안 함
+ * 한 공고에 대한 소득·자산 판정.
+ * p = { householdIncome, soloIncome, householdAsset, soloAsset, realEstate, car, dualIncome, household, tier }
+ *     소득은 원, 자산은 만원.
+ * std = { urban: {base}, median: {base} }
  */
-export function evaluate({ corner, income, household, totalAssetManwon, carManwon, tier, base }) {
-  const rule = INCOME_RULES[corner];
-  const out = { verdict: 'unknown', rule: rule?.label ?? null, note: rule?.note ?? null, source: rule?.source ?? null };
-  if (!rule || !base) return out;
+export function evaluate(listing, p, std) {
+  const key = ruleKeyOf(listing);
+  const rule = key && RULES[key];
+  const out = { rule: rule?.label ?? null, note: rule?.note ?? null, source: rule?.source ?? null, verdict: 'unknown' };
+  if (!rule) return out;
 
-  const limitWon = base[household] ?? base[Object.keys(base).at(-1)];
-  if (!limitWon || income == null) return out;
+  // 소득 기준이 없는 유형(든든전세·영구임대)
+  if (rule.basis === 'none') {
+    out.verdict = rule.verified ? 'nolimit' : 'unknown';
+    return out;
+  }
 
-  const pct = rule.verified ? (rule.bySize?.[household] ?? rule.base) : rule.ceiling;
-  const threshold = Math.round(limitWon * (pct / 100));
-  const ratio = income / limitWon * 100;     // 내 소득이 100% 기준의 몇 %인가
+  const table = rule.basis === 'median' ? std?.median?.base : std?.urban?.base;
+  if (!table) return out;
 
-  out.myPercent = Math.round(ratio);
+  // 가구원수가 표를 넘으면 마지막 값을 쓴다
+  const sizes = Object.keys(table).map(Number).sort((a, b) => a - b);
+  const size = Math.min(p.household ?? 1, sizes.at(-1));
+  const base = table[size];
+  if (!base) return out;
+
+  // 청년처럼 본인 소득만 보는 계층이면 1인 기준으로 다시 본다
+  const useSolo = (rule.soloTiers ?? []).includes(p.tier) && p.soloIncome != null;
+  const income = useSolo ? p.soloIncome : p.householdIncome;
+  const incomeBase = useSolo ? (table[1] ?? base) : base;
+  if (income == null) return out;
+
+  // 적용 비율
+  const inc = rule.income ?? {};
+  let pct = inc.pct ?? inc.ceiling;
+  if (inc.bySize?.[useSolo ? 1 : size]) pct = inc.bySize[useSolo ? 1 : size];
+  if (inc.addPointsBySize?.[size]) pct += inc.addPointsBySize[size];
+  if (inc.dual && p.dualIncome && p.tier === '신혼부부') pct = Math.max(pct, inc.dual);
+  if (pct == null) return out;
+
+  const threshold = Math.round(incomeBase * (pct / 100));
+  out.myPercent = Math.round(income / incomeBase * 100);
   out.thresholdPercent = pct;
   out.thresholdWon = threshold;
+  out.bySolo = useSolo;
+  out.basis = rule.basis === 'median' ? '기준 중위소득' : '도시근로자 월평균소득';
 
   if (income > threshold) out.verdict = 'over';
   else if (income > threshold * 0.9) out.verdict = 'tight';
-  else out.verdict = rule.verified ? 'ok' : 'unknown';   // 미확인 유형은 '통과'라고 말하지 않는다
+  else out.verdict = rule.verified ? 'ok' : 'unknown';   // 미확인 유형은 통과라고 말하지 않는다
 
-  // 자산은 유형과 무관하게 공공임대 공통 기준으로 본다
-  const limits = ASSET_LIMITS[tier] ?? ASSET_LIMITS['일반'];
-  out.assetTier = tier;
-  out.assetLimit = limits;
-  if (totalAssetManwon != null && totalAssetManwon > limits.total) { out.verdict = 'over'; out.assetOver = '총자산'; }
-  if (carManwon != null && carManwon > limits.car) { out.verdict = 'over'; out.assetOver = '자동차'; }
+  // ── 자산 ──
+  if (rule.assets) {
+    const limit = rule.assets[p.tier] ?? rule.assets['일반'];
+    const useSoloAsset = (rule.soloAssetTiers ?? []).includes(p.tier);
+    const asset = useSoloAsset ? (p.soloAsset ?? p.householdAsset) : p.householdAsset;
+    out.assetLimit = limit;
+    out.assetBySolo = useSoloAsset;
+    if (limit != null && asset != null && asset > limit) { out.verdict = 'over'; out.assetOver = '총자산'; }
+  }
+  if (rule.realEstate != null && p.realEstate != null && p.realEstate > rule.realEstate) {
+    out.verdict = 'over'; out.assetOver = '부동산';
+  }
+  if (rule.car != null && p.car != null && p.car > rule.car) { out.verdict = 'over'; out.assetOver = '자동차'; }
+  out.carLimit = rule.car ?? null;
 
   return out;
 }
