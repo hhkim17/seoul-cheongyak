@@ -201,3 +201,36 @@ export async function scrapeIncomeStandard() {
 
   return { year, base: table, source: SH_INCOME_URL, fetchedAt: Date.now() };
 }
+
+// ── 기준 중위소득표 (통합공공임대용) ────────────────────────────────
+// 통합공공임대만 도시근로자 소득이 아니라 기준 중위소득을 쓴다.
+// LH 통합공공임대 입주자격 페이지에 해마다 갱신된 표가 실린다.
+const LH_UNIFIED_URL = 'https://apply.lh.or.kr/lhapply/cm/cntnts/cntntsView.do?mi=1201585&cntntsId=1201333';
+
+/** 반환: { year, base: { 1: 원, … }, source } — base는 중위소득 100% */
+export async function scrapeMedianIncome() {
+  const html = await get(LH_UNIFIED_URL);
+  const year = (html.match(/(20\d{2})\s*년\s*가구원수별\s*기준\s*중위소득/) || [])[1] || null;
+
+  for (const m of html.matchAll(/<table[\s\S]*?<\/table>/g)) {
+    const tbl = m[0];
+    if (!/중위소득/.test(strip(tbl))) continue;
+    const rows = [...tbl.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map((r) => cellsOf(r[1]));
+
+    // 헤더에서 퍼센트 열 순서를 읽는다 (30·50·70·100·110·120·130·150…)
+    const pcts = (rows.find((c) => c.filter((x) => /^\d+%$/.test(x)).length >= 4) || [])
+      .filter((x) => /^\d+%$/.test(x)).map((x) => Number(x.replace('%', '')));
+    const at100 = pcts.indexOf(100);
+    if (at100 < 0) continue;
+
+    const base = {};
+    for (const cells of rows) {
+      const size = Number((String(cells[0]).match(/^(\d+)\s*인/) || [])[1]);
+      if (!size) continue;
+      const nums = cells.slice(1).map((v) => Number(String(v).replace(/[^0-9]/g, ''))).filter(Boolean);
+      if (nums[at100]) base[size] = nums[at100];
+    }
+    if (Object.keys(base).length >= 4) return { year, base, source: LH_UNIFIED_URL, fetchedAt: Date.now() };
+  }
+  throw new Error('기준 중위소득표를 찾지 못했습니다');
+}
