@@ -212,7 +212,9 @@ export function normalizeUrbtyModel(m) {
  */
 export function classifyNotice(title, fallback = '안내') {
   const t = String(title || '');
-  if (/(당첨자|서류\s*심사|합격자|입주\s*대상자|대상자\s*발표|예비자\s*발표|명단\s*발표|동호\s*배정|사전\s*방문|계약\s*안내|입주\s*안내|결과\s*발표|추첨\s*결과)/.test(t)) return '발표';
+  if (/(당첨자|서류\s*심사|합격자|입주\s*대상자|대상자\s*발표|예비자\s*발표|명단\s*발표|동호\s*배정|사전\s*방문|계약\s*안내|입주\s*안내|결과\s*발표|추첨\s*결과|접수\s*결과|결과\s*안내|경쟁률)/.test(t)) return '발표';
+  // 이미 나간 공고에 정보를 덧붙인 글 — 새 모집이 아니다
+  if (/(정보\s*추가|추가\s*안내|변경\s*안내|안내\s*사항)/.test(t)) return '안내';
   if (/(모집|공급\s*공고|청약\s*접수|입주자\s*선정)/.test(t)) return '모집';
   return fallback;
 }

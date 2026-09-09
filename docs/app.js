@@ -481,7 +481,7 @@ function cardOf(l, a) {
         ? (a.minMonthly != null ? `${num(a.minMonthly)}만원${a.maxMonthly !== a.minMonthly ? ` ~ ${num(a.maxMonthly)}` : ''}` : '—')
         : (a.pyeong ? `${num(a.pyeong)}만원` : '—')}</b></div>
       <div><span>전용면적</span><b>${a.minArea != null ? `${a.minArea} ~ ${a.maxArea}㎡` : '—'}</b></div>
-      <div><span>${st.key === 'done' ? '당첨발표' : '주요 일정'}</span><b>${fmtDate(st.until)}</b></div>
+      <div><span>${st.key === 'notice' ? '공고일' : st.key === 'done' ? '당첨발표' : '주요 일정'}</span><b>${fmtDate(st.until)}</b></div>
     </div>
     <div class="reasons">${a.reasons.slice(0, 3).map((r) => `<span class="reason${r.neg ? ' neg' : ''}">${esc(r.t)}</span>`).join('')}</div>`;
   c.onclick = (e) => {
