@@ -206,7 +206,7 @@
       <div class="grid3">
         <label class="field"><span>생년월</span><input id="pBirth" type="month"></label>
         <label class="field"><span>청약통장 가입연월</span><input id="pAccountYm" type="month"></label>
-        <label class="field"><span>부양가족 수 <span class="hint">(본인 제외)</span></span><input id="pFamily" type="number" min="0" max="10" step="1" value="0"></label>
+        <label class="field"><span>부양가족 수 <span class="hint">가점용 · 본인 제외</span></span><input id="pFamily" type="number" min="0" max="10" step="1" value="0"></label>
       </div>
       <div class="grid3" style="margin-top:10px">
         <label class="field"><span>혼인신고일 <span class="hint">(선택)</span></span><input id="pMarriage" type="date"></label>
@@ -227,7 +227,11 @@
 
     <fieldset>
       <legend>소득 · 자산 <span class="hint">(공공임대·공공분양 자격 계산용)</span></legend>
-      <div class="grid2">
+      <label class="field" style="max-width:240px">
+        <span>세대원 수 <span class="hint">본인 포함 · 등본상 인원</span></span>
+        <input id="pHousehold" type="number" min="1" max="12" step="1" placeholder="예: 부모님과 살면 3">
+      </label>
+      <div class="grid2" style="margin-top:12px">
         <div>
           <p class="colhead">세대 기준 <span class="hint">세대원 합산</span></p>
           <label class="field"><span>월평균소득 (만원)</span><input id="pIncome" type="number" min="0" step="10" placeholder="세전, 세대원 합산"></label>
@@ -323,7 +327,7 @@
 
     <fieldset>
       <legend>거주 요건</legend>
-      <label class="toggle"><input type="checkbox" id="pSeoulResident" checked> 서울 거주 (해당지역 1순위 우선공급 대상)</label>
+      <label class="toggle"><input type="checkbox" id="pSeoulResident" checked> 서울 거주 <span class="hint">해당지역 1순위 — 당첨 커트라인 비교 기준이 달라집니다</span></label>
     </fieldset>
 
     <div class="modal-actions">
