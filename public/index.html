@@ -227,10 +227,16 @@
 
     <fieldset>
       <legend>소득 · 자산 <span class="hint">(공공임대·공공분양 자격 계산용)</span></legend>
-      <label class="field" style="max-width:240px">
-        <span>세대원 수 <span class="hint">본인 포함 · 등본상 인원</span></span>
-        <input id="pHousehold" type="number" min="1" max="12" step="1" placeholder="예: 부모님과 살면 3">
-      </label>
+      <div class="grid2" style="max-width:520px">
+        <label class="field">
+          <span>세대원 수 <span class="hint">본인 포함 · 등본상 인원</span></span>
+          <input id="pHousehold" type="number" min="1" max="12" step="1" placeholder="예: 부모님과 살면 3">
+        </label>
+        <label class="field">
+          <span>출산자녀 수 <span class="hint">2023.3.28 이후 출생 · 태아 포함</span></span>
+          <input id="pNewborn" type="number" min="0" max="6" step="1" placeholder="없으면 0">
+        </label>
+      </div>
       <div class="grid2" style="margin-top:12px">
         <div>
           <p class="colhead">세대 기준 <span class="hint">세대원 합산</span></p>
