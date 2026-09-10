@@ -31,6 +31,9 @@ const SEOUL_GU = ['강남구','강동구','강북구','강서구','관악구','�
 
 const SPECIAL_TYPES = [
   { key: 'newlywed',   label: '신혼부부',   field: 'newlywed' },
+  // 제도상 '혼인을 계획 중이며 입주 전까지 혼인사실을 증명할 수 있는 자'.
+  // 날짜가 아니라 의사를 묻는 요건이라 날짜를 받지 않는다.
+  { key: 'preNewlywed', label: '예비신혼부부', field: 'newlywed' },
   { key: 'firstLife',  label: '생애최초',   field: 'firstLife' },
   { key: 'multichild', label: '다자녀',     field: 'multichild' },
   { key: 'oldParents', label: '노부모부양', field: 'oldParents' },
@@ -69,6 +72,10 @@ let STD = null;   // { urban: {year, base}, median: {year, base} }
  * 청약 가점의 '부양가족 수'와 다르다 — 부모님과 사는 미혼 청년은
  * 부양가족 0명이지만 세대원은 3명이다. 따로 받되, 없으면 갈음한다.
  */
+/** n년 뒤 시점의 값으로 바꿔 본다 (납입은 매월 이어간다고 가정) */
+const shift = (v, perYear) => (v == null ? v : v + perYear * futureYears);
+const futureAge = () => { const a = myAgeYears(); return a == null ? null : a + futureYears; };
+
 const householdSize = () => Math.max(1, Number(profile.householdCount) || (Number(profile.family) || 0) + 1);
 const myAgeYears = () => (profile.birthYm ? Math.floor(yearsBetween(`${profile.birthYm}-01`) ?? 0) : null);
 
@@ -95,7 +102,7 @@ function incomeCheck(l) {
     dualIncome: profile.dualIncome,
     household: householdSize(),
     newbornCount: Number(profile.newbornCount) || 0,
-    tier: Std.guessTier({ ageYears: myAgeYears(), special: profile.special }),
+    tier: Std.guessTier({ ageYears: futureAge(), special: profile.special }),
   }, STD);
 }
 
@@ -161,7 +168,9 @@ function accountScore(y) {
   return Math.min(17, 3 + (Math.floor(y) - 1));
 }
 function familyScore(n) { return Math.min(35, 5 + (Number(n) || 0) * 5); }
-function totalScore(p) { return noHouseScore(noHouseYearsOf(p)) + accountScore(accountYearsOf(p)) + familyScore(p.family); }
+function totalScore(p) {
+  return noHouseScore(shift(noHouseYearsOf(p), 1)) + accountScore(shift(accountYearsOf(p), 1)) + familyScore(p.family);
+}
 
 // ── 상태 판정 ────────────────────────────────────────────────────────
 function windows(l) {
@@ -215,6 +224,9 @@ const DEFAULT_WATCH = {
 };
 let watchCfg = { ...DEFAULT_WATCH, ...JSON.parse(localStorage.getItem('cheongyak.watch') || '{}') };
 
+// 통장·무주택 기간이 쌓이면 순위와 가점이 달라진다. 결혼 시점과 무관하게 미리 본다.
+let futureYears = 0;
+
 let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false, incomeFitOnly: false };
 let listings = [];
 let meta = {};
@@ -242,8 +254,8 @@ function analyze(l) {
   const prefAreas = allAreas.filter((a) => a >= profile.areaMin && a <= profile.areaMax);
   const rankArea = prefAreas.length ? Math.min(...prefAreas) : (allAreas.length ? Math.min(...allAreas) : null);
   const rank = Rank.judgeRank(l, {
-    accountYears: accountYearsOf(profile),
-    payments: profile.payments,
+    accountYears: shift(accountYearsOf(profile), 1),
+    payments: shift(profile.payments, 12),
     depositManwon: profile.depositManwon,
     isGangnam3: profile.isGangnam3,
   }, rankArea);
