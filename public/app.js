@@ -93,6 +93,7 @@ function incomeCheck(l) {
     car: profile.carManwon,
     dualIncome: profile.dualIncome,
     household: householdSize(),
+    newbornCount: Number(profile.newbornCount) || 0,
     tier: Std.guessTier({ ageYears: myAgeYears(), special: profile.special }),
   }, STD);
 }
@@ -186,7 +187,7 @@ function statusOf(l) {
 
 // ── 프로필 ───────────────────────────────────────────────────────────
 const DEFAULT_PROFILE = {
-  birthYm: '', marriageDate: '', noHouseSince: '', accountYm: '', family: 0, householdCount: null,
+  birthYm: '', marriageDate: '', noHouseSince: '', accountYm: '', family: 0, householdCount: null, newbornCount: 0,
   incomeManwon: null, soloIncomeManwon: null, assetManwon: null, soloAssetManwon: null,
   realEstateManwon: null, carManwon: null, dualIncome: false,
   budgetEok: 9, areaMin: 49, areaMax: 99,
@@ -665,6 +666,7 @@ function drawerHTML(l, a) {
       ${a.income.thresholdWon ? `(월 ${a.income.thresholdWon.toLocaleString('ko-KR')}원)` : ''}
       ${a.income.assetOver ? `<br><b>${esc(a.income.assetOver)} 한도를 넘습니다.</b>` : ''}
       ${a.income.bySolo ? '<br><span class="fineprint">이 유형의 청년 계층은 본인 소득만 보므로 1인가구 기준으로 계산했습니다.</span>' : ''}
+      ${a.income.newbornBonusPct ? `<br><span class="fineprint">출산자녀 가산으로 기준이 ${a.income.newbornBonusPct}%p 올라간 값입니다.</span>` : ''}
       ${a.income.assetLimit != null ? `<br><span class="fineprint">${a.income.assetBySolo ? '본인' : '세대'} 총자산 한도 ${a.income.assetLimit.toLocaleString('ko-KR')}만원${a.income.carLimit ? ` · 자동차 ${a.income.carLimit.toLocaleString('ko-KR')}만원` : ''}</span>` : ''}
     </p>
     ${a.income.note ? `<p class="fineprint">${esc(a.income.note)}</p>` : ''}
@@ -730,6 +732,7 @@ function openProfile() {
   $('#pAccountYm').value = profile.accountYm || '';
   $('#pFamily').value = profile.family;
   $('#pHousehold').value = profile.householdCount ?? '';
+  $('#pNewborn').value = profile.newbornCount ?? '';
   $('#pIncome').value = profile.incomeManwon ?? '';
   $('#pSolo').value = profile.soloIncomeManwon ?? '';
   $('#pSoloAsset').value = profile.soloAssetManwon ?? '';
@@ -761,6 +764,7 @@ function formFromModal() {
     accountYm: $('#pAccountYm').value,
     family: +$('#pFamily').value || 0,
     householdCount: $('#pHousehold').value === '' ? null : Number($('#pHousehold').value),
+    newbornCount: $('#pNewborn').value === '' ? 0 : Number($('#pNewborn').value),
   };
 }
 

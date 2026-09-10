@@ -188,6 +188,16 @@ export function evaluate(listing, p, std) {
   if (inc.dual && p.dualIncome && p.tier === '신혼부부') pct = Math.max(pct, inc.dual);
   if (pct == null) return out;
 
+  // 출산자녀 가산 — 공고문에 '출산자녀 1인 10% 가산, 2인 이상 20% 가산'으로 적힌다.
+  // 소득과 자산 기준이 함께 완화된다.
+  const bonusTable = listing.criteria?.newbornBonusPct;
+  let bonusPct = 0;
+  if (bonusTable && p.newbornCount > 0) {
+    bonusPct = p.newbornCount >= 2 ? (bonusTable['2+'] ?? 20) : (bonusTable['1'] ?? 10);
+    pct += bonusPct;
+    out.newbornBonusPct = bonusPct;
+  }
+
   const threshold = Math.round(incomeBase * (pct / 100));
   out.myPercent = Math.round(income / incomeBase * 100);
   out.thresholdPercent = pct;
@@ -206,7 +216,8 @@ export function evaluate(listing, p, std) {
 
   // ── 자산 ──
   if (rule.assets) {
-    const limit = rule.assets[p.tier] ?? rule.assets['일반'];
+    let limit = rule.assets[p.tier] ?? rule.assets['일반'];
+    if (limit != null && bonusPct) limit = Math.round(limit * (1 + bonusPct / 100));
     const useSoloAsset = (rule.soloAssetTiers ?? []).includes(p.tier);
     const asset = useSoloAsset ? (p.soloAsset ?? p.householdAsset) : p.householdAsset;
     out.assetLimit = limit;
