@@ -1178,6 +1178,13 @@ $('#keyInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#k
 
 $('#btnRefresh').onclick = () => load(true);   // 목록만 다시 받기 (빠름)
 if ($('#btnProfile')) $('#btnProfile').onclick = openProfile;
+
+if ($('#pIncomeKind')) $('#pIncomeKind').onclick = (e) => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  profile.incomeKind = b.dataset.kind;
+  renderIncomeSrc();
+};
 $('#btnMail').onclick = openMail;
 $('#btnAuth').onclick = openAuth;
 
@@ -1256,6 +1263,7 @@ $('#pSave').onclick = () => {
     areaMin: +valOf('#pAreaMin') || 0,
     areaMax: +valOf('#pAreaMax') || 999,
     seoulResident: chkOf('#pSeoulResident'),
+    incomeKind: profile.incomeKind,
   };
   cutlineCache = null;   // 거주지 기준이 바뀌면 커트라인도 다시 잡는다
   saveProfile();
