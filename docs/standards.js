@@ -131,20 +131,26 @@ export function evaluate(listing, p, std) {
   const key = ruleKeyOf(listing);
   let rule = key && RULES[key];
 
-  // 공고문에서 직접 읽은 기준이 있으면 그것이 우선이다 — 제도 기본값보다 정확하다
+  // 공고문에서 읽은 기준. 공고문에는 계층·가구원수별 숫자가 뒤섞여 있어
+  // 어느 것이 내게 해당하는지 글만으로는 가릴 수 없다. 그래서 범위로만 쓴다.
+  //  · 유형별 기준이 확인된 것(행복주택 등)은 그 기준으로 판정하고, 공고문 값은 참고로 덧붙인다.
+  //  · 확인되지 않은 것(매입임대·사회주택 등)은 공고문 범위로 '분명한 것'만 말한다.
   const c = listing.criteria;
-  if (c?.incomePct) {
+  const noticeUsable = c?.incomePctMax != null;
+  if (noticeUsable && !rule?.verified) {
     rule = {
-      label: `${rule?.label ?? '이 공고'} (공고문 기준)`,
-      verified: true,
+      label: `${rule?.label ?? '이 공고'} · 공고문 기준`,
+      verified: false,
       basis: c.incomeBasis === 'median' ? 'median' : 'urban',
-      income: { pct: c.incomePct },
+      income: { pct: c.incomePctMax, pctMin: c.incomePctMin },
       assets: c.totalAssetManwon ? { 일반: c.totalAssetManwon } : rule?.assets,
-      soloAssetTiers: rule?.soloAssetTiers,
       car: c.carManwon ?? rule?.car ?? null,
       source: rule?.source ?? null,
-      note: `${c.from ?? '공고문'}에서 읽은 기준입니다 — ${c.incomeBasis === 'median' ? '기준 중위소득' : '도시근로자 월평균소득'} ${c.incomePcts.join('% · ')}%.`
-        + (rule?.note ? ` (일반 안내: ${rule.note})` : ''),
+      note: `${c.from ?? '공고문'}에서 읽었습니다 — ${c.incomeBasis === 'median' ? '기준 중위소득' : '도시근로자 월평균소득'} `
+        + (c.incomePctMin === c.incomePctMax ? `${c.incomePctMax}%` : `${c.incomePctMin}~${c.incomePctMax}%`)
+        + ' (계층·가구원수에 따라 갈립니다).'
+        + (c.totalAssetRange ? ` 총자산 ${c.totalAssetRange[0].toLocaleString('ko-KR')}~${c.totalAssetRange[1].toLocaleString('ko-KR')}만원.` : '')
+        + (c.newbornBonusPct ? ` 출산자녀가 있으면 기준이 완화됩니다(1인 +${c.newbornBonusPct['1'] ?? 10}%p, 2인 이상 +${c.newbornBonusPct['2+'] ?? 20}%p).` : ''),
       fromNotice: true,
     };
   }
@@ -190,7 +196,12 @@ export function evaluate(listing, p, std) {
   out.basis = rule.basis === 'median' ? '기준 중위소득' : '도시근로자 월평균소득';
 
   if (income > threshold) out.verdict = 'over';
-  else if (income > threshold * 0.9) out.verdict = 'tight';
+  else if (inc.pctMin != null) {
+    // 공고문 범위: 최솟값 이하라야 어떤 계층으로도 확실히 통과
+    const floor = Math.round(incomeBase * (inc.pctMin / 100));
+    out.thresholdPercentMin = inc.pctMin;
+    out.verdict = income <= floor ? 'ok' : 'tight';
+  } else if (income > threshold * 0.9) out.verdict = 'tight';
   else out.verdict = rule.verified ? 'ok' : 'unknown';   // 미확인 유형은 통과라고 말하지 않는다
 
   // ── 자산 ──
@@ -212,6 +223,11 @@ export function evaluate(listing, p, std) {
     out.verdict = 'over'; out.assetOver = '자동차(대학생은 소유 불가)';
   }
   out.carLimit = rule.car ?? null;
+  if (noticeUsable && rule.verified) {
+    out.noticeInfo = `공고문에는 ${c.incomeBasis === 'median' ? '중위소득' : '도시근로자'} `
+      + (c.incomePctMin === c.incomePctMax ? `${c.incomePctMax}%` : `${c.incomePctMin}~${c.incomePctMax}%`)
+      + '로 적혀 있습니다.';
+  }
 
   return out;
 }
