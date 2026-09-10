@@ -4,6 +4,13 @@ import * as Std from './standards.js';
 import * as Rank from './rank.js';
 
 const $ = (s) => document.querySelector(s);
+// 화면 조각이 하나라도 빠져 있으면(브라우저에 남은 옛 HTML 등) 예외가 나서
+// 그 뒤 코드가 통째로 멈춘다. 그래서 값 읽고 쓰는 건 전부 널 안전하게 둔다.
+const setVal = (s, v) => { const e = $(s); if (e) e.value = v; };
+const setChk = (s, v) => { const e = $(s); if (e) e.checked = !!v; };
+const valOf = (s) => $(s)?.value ?? '';
+const chkOf = (s) => !!$(s)?.checked;
+const on = (s, ev, fn) => { const e = $(s); if (e) e.addEventListener(ev, fn); };
 const el = (t, cls, html) => { const e = document.createElement(t); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -806,26 +813,26 @@ function drawerHTML(l, a) {
 
 // ── 프로필 모달 ──────────────────────────────────────────────────────
 function openProfile() {
-  $('#pBirth').value = profile.birthYm || '';
-  $('#pMarriage').value = profile.marriageDate || '';
-  $('#pNoHouseSince').value = profile.noHouseSince || '';
-  $('#pAccountYm').value = profile.accountYm || '';
-  $('#pFamily').value = profile.family;
-  $('#pHousehold').value = profile.householdCount ?? '';
-  $('#pNewborn').value = profile.newbornCount ?? '';
-  $('#pPayments').value = profile.payments ?? '';
-  $('#pDeposit').value = profile.depositManwon ?? '';
-  $('#pIncome').value = profile.incomeManwon ?? '';
-  $('#pSolo').value = profile.soloIncomeManwon ?? '';
-  $('#pSoloAsset').value = profile.soloAssetManwon ?? '';
-  $('#pRealEstate').value = profile.realEstateManwon ?? '';
-  $('#pDual').checked = !!profile.dualIncome;
-  $('#pAsset').value = profile.assetManwon ?? '';
-  $('#pCar').value = profile.carManwon ?? '';
-  $('#pBudget').value = profile.budgetEok;
-  $('#pAreaMin').value = profile.areaMin;
-  $('#pAreaMax').value = profile.areaMax;
-  $('#pSeoulResident').checked = profile.seoulResident;
+  setVal('#pBirth', profile.birthYm || '');
+  setVal('#pMarriage', profile.marriageDate || '');
+  setVal('#pNoHouseSince', profile.noHouseSince || '');
+  setVal('#pAccountYm', profile.accountYm || '');
+  setVal('#pFamily', profile.family);
+  setVal('#pHousehold', profile.householdCount ?? '');
+  setVal('#pNewborn', profile.newbornCount ?? '');
+  setVal('#pPayments', profile.payments ?? '');
+  setVal('#pDeposit', profile.depositManwon ?? '');
+  setVal('#pIncome', profile.incomeManwon ?? '');
+  setVal('#pSolo', profile.soloIncomeManwon ?? '');
+  setVal('#pSoloAsset', profile.soloAssetManwon ?? '');
+  setVal('#pRealEstate', profile.realEstateManwon ?? '');
+  setChk('#pDual', !!profile.dualIncome);
+  setVal('#pAsset', profile.assetManwon ?? '');
+  setVal('#pCar', profile.carManwon ?? '');
+  setVal('#pBudget', profile.budgetEok);
+  setVal('#pAreaMin', profile.areaMin);
+  setVal('#pAreaMax', profile.areaMax);
+  setChk('#pSeoulResident', profile.seoulResident);
   renderProfileChips();
   updateScoreOut();
   updateIncomeOut();
@@ -840,23 +847,23 @@ function renderProfileChips() {
 
 function formFromModal() {
   return {
-    birthYm: $('#pBirth').value,
-    marriageDate: $('#pMarriage').value,
-    noHouseSince: $('#pNoHouseSince').value,
-    accountYm: $('#pAccountYm').value,
-    family: +$('#pFamily').value || 0,
-    householdCount: $('#pHousehold').value === '' ? null : Number($('#pHousehold').value),
-    newbornCount: $('#pNewborn').value === '' ? 0 : Number($('#pNewborn').value),
-    payments: $('#pPayments').value === '' ? null : Number($('#pPayments').value),
-    depositManwon: $('#pDeposit').value === '' ? null : Number($('#pDeposit').value),
+    birthYm: valOf('#pBirth'),
+    marriageDate: valOf('#pMarriage'),
+    noHouseSince: valOf('#pNoHouseSince'),
+    accountYm: valOf('#pAccountYm'),
+    family: +valOf('#pFamily') || 0,
+    householdCount: valOf('#pHousehold') === '' ? null : Number(valOf('#pHousehold')),
+    newbornCount: valOf('#pNewborn') === '' ? 0 : Number(valOf('#pNewborn')),
+    payments: valOf('#pPayments') === '' ? null : Number(valOf('#pPayments')),
+    depositManwon: valOf('#pDeposit') === '' ? null : Number(valOf('#pDeposit')),
   };
 }
 
 function updateIncomeOut() {
   const box = $('#incomeOut');
   if (!STD?.urban?.base) { box.textContent = '소득 기준표를 아직 불러오지 못했습니다.'; return; }
-  const num = (id) => (($('#' + id).value === '') ? null : Number($('#' + id).value));
-  const size = Math.max(1, Number($('#pHousehold').value) || (Number($('#pFamily').value) || 0) + 1);
+  const num = (id) => { const v = valOf('#' + id); return v === '' ? null : Number(v); };
+  const size = Math.max(1, Number(valOf('#pHousehold')) || (Number(valOf('#pFamily')) || 0) + 1);
   const u = STD.urban.base, m = STD.median?.base;
   const uBase = u[Math.min(size, Math.max(...Object.keys(u).map(Number)))];
   const tier = Std.guessTier({ ageYears: myAgeYears(), special: profile.special });
@@ -1185,27 +1192,27 @@ $('#fReset').onclick = () => {
 };
 
 for (const id of ['pBirth', 'pMarriage', 'pNoHouseSince', 'pAccountYm', 'pFamily']) {
-  $('#' + id).addEventListener('input', updateScoreOut);
+  on('#' + id, 'input', updateScoreOut);
 }
 for (const id of ['pIncome', 'pSolo', 'pFamily', 'pHousehold', 'pBirth', 'pDual']) {
-  $('#' + id).addEventListener('input', updateIncomeOut);
+  on('#' + id, 'input', updateIncomeOut);
 }
 
 $('#pSave').onclick = () => {
   profile = {
     ...profile,
     ...formFromModal(),
-    incomeManwon: $('#pIncome').value === '' ? null : Number($('#pIncome').value),
-    soloIncomeManwon: $('#pSolo').value === '' ? null : Number($('#pSolo').value),
-    soloAssetManwon: $('#pSoloAsset').value === '' ? null : Number($('#pSoloAsset').value),
-    realEstateManwon: $('#pRealEstate').value === '' ? null : Number($('#pRealEstate').value),
-    dualIncome: $('#pDual').checked,
-    assetManwon: $('#pAsset').value === '' ? null : Number($('#pAsset').value),
-    carManwon: $('#pCar').value === '' ? null : Number($('#pCar').value),
-    budgetEok: +$('#pBudget').value || 0,
-    areaMin: +$('#pAreaMin').value || 0,
-    areaMax: +$('#pAreaMax').value || 999,
-    seoulResident: $('#pSeoulResident').checked,
+    incomeManwon: valOf('#pIncome') === '' ? null : Number(valOf('#pIncome')),
+    soloIncomeManwon: valOf('#pSolo') === '' ? null : Number(valOf('#pSolo')),
+    soloAssetManwon: valOf('#pSoloAsset') === '' ? null : Number(valOf('#pSoloAsset')),
+    realEstateManwon: valOf('#pRealEstate') === '' ? null : Number(valOf('#pRealEstate')),
+    dualIncome: chkOf('#pDual'),
+    assetManwon: valOf('#pAsset') === '' ? null : Number(valOf('#pAsset')),
+    carManwon: valOf('#pCar') === '' ? null : Number(valOf('#pCar')),
+    budgetEok: +valOf('#pBudget') || 0,
+    areaMin: +valOf('#pAreaMin') || 0,
+    areaMax: +valOf('#pAreaMax') || 999,
+    seoulResident: chkOf('#pSeoulResident'),
   };
   cutlineCache = null;   // 거주지 기준이 바뀌면 커트라인도 다시 잡는다
   saveProfile();
