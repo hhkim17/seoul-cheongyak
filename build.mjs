@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getServiceKey } from './store.mjs';
-import { collectListings, enrichMany, isClosed, sourceStatus, log, state } from './collect.mjs';
+import { collectListings, enrichMany, readCriteriaMany, isClosed, sourceStatus, log, state } from './collect.mjs';
 import { CORNERS } from './normalize.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -64,6 +64,11 @@ log(`상세 보강 (${data.listings.length}건)`);
 let last = 0;
 await enrichMany(key, data.listings, (done, total) => {
   if (done - last >= 25 || done === total) { log(`  ${done}/${total}`); last = done; }
+});
+
+// 공고문(PDF)에서 소득·자산 기준을 읽는다 — 유형별 일반 기준보다 정확하다
+await readCriteriaMany(data.listings, (done, total) => {
+  if (done % 5 === 0 || done === total) log(`  공고문 ${done}/${total}`);
 });
 
 // 접수 마감된 공고는 경쟁률이 나오므로 한 번 더 확인해 둔다

@@ -5,6 +5,7 @@ import * as LH from './lh.mjs';
 import { myhome } from './myhome.mjs';
 import { isTransient } from './net.mjs';
 import { extractCriteria } from './criteria.mjs';
+import { pdfToText, pickNoticePdf } from './pdftext.mjs';
 import { scrapeSh, scrapeHug, scrapeIncomeStandard, scrapeMedianIncome } from './scrape.mjs';
 import * as N from './normalize.mjs';
 import { cacheGet, cacheSet } from './store.mjs';
@@ -313,6 +314,30 @@ export async function enrich(key, listing, { withCmpet }) {
   return out;
 }
 
+/**
+ * 본문에서 기준을 못 읽었으면 첨부 모집공고문(PDF)을 열어 읽는다.
+ * 공고문이 최종 근거이므로, 유형별 일반 기준보다 이쪽이 정확하다.
+ */
+export async function readCriteriaFromPdf(listing) {
+  if (listing.criteria) return listing.criteria;
+  const pdf = pickNoticePdf(listing.attachments);
+  if (!pdf) return null;
+  const cacheKey = `criteria_${listing.id}`;
+  const hit = cacheGet(cacheKey, 30 * 24 * 60 * 60 * 1000);   // 공고문은 바뀌지 않는다 — 오래 둔다
+  if (hit) return hit.value;
+  try {
+    const text = await pdfToText(pdf.url, { maxPages: 12 });
+    const c = extractCriteria(text);
+    const value = c ? { ...c, from: `공고문 ${pdf.name}` } : null;
+    cacheSet(cacheKey, value);
+    return value;
+  } catch (e) {
+    log(`  공고문 읽기 실패(${listing.name.slice(0, 20)}): ${e.message}`);
+    cacheSet(cacheKey, null);
+    return null;
+  }
+}
+
 /** 동시 요청 수를 제한하며 순회 */
 export async function pool(items, limit, worker) {
   const queue = [...items];
@@ -337,4 +362,20 @@ export async function enrichMany(key, targets, onProgress) {
     Object.assign(l, e);
     onProgress?.(++done, targets.length);
   });
+}
+
+/** 모집공고 중 기준을 아직 모르는 것만 골라 공고문을 읽는다 */
+export async function readCriteriaMany(listings, onProgress) {
+  const targets = listings.filter((l) => !l.criteria && l.noticeKind !== '발표' && l.noticeKind !== '안내'
+    && pickNoticePdf(l.attachments));
+  if (!targets.length) return 0;
+  log(`공고문에서 기준 읽기 (${targets.length}건)`);
+  let found = 0, done = 0;
+  await pool(targets, 3, async (l) => {
+    const c = await readCriteriaFromPdf(l);
+    if (c) { l.criteria = c; found++; }
+    onProgress?.(++done, targets.length);
+  });
+  log(`  ${found}/${targets.length}건에서 기준을 읽었습니다`);
+  return found;
 }
