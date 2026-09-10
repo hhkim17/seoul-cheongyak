@@ -39,20 +39,33 @@ export function extractCriteria(text) {
     const list = pcts[basis].sort((a, b) => a - b);
     out.incomeBasis = basis;
     out.incomePcts = list;
-    out.incomePct = list.at(-1);   // 여러 개면 가장 너그러운 쪽(일반공급)을 한도로 본다
+    // 공고문에는 계층·가구원수별 숫자가 뒤섞여 나온다. 어느 것이 내게 해당하는지
+    // 글만 보고는 가릴 수 없으므로 범위로 남긴다.
+    //  · 최솟값 이하면 어떤 기준으로도 통과
+    //  · 최댓값 초과면 어떤 기준으로도 탈락
+    //  · 그 사이는 단정하지 않는다
+    out.incomePctMin = list[0];
+    out.incomePctMax = list.at(-1);
   }
 
   // ── 자산 한도 ──
-  const asset = t.match(/총\s?자산[^0-9]{0,24}([\d,]{3,12})\s*만\s?원/);
-  if (asset && LIMIT_NEAR.test(t.slice(asset.index, asset.index + asset[0].length + 12))) {
-    const v = num(asset[1]);
-    if (v >= 1000 && v <= 200000) out.totalAssetManwon = v;
-  }
-  const car = t.match(/자동차[^0-9]{0,24}([\d,]{3,10})\s*만\s?원/);
-  if (car && LIMIT_NEAR.test(t.slice(car.index, car.index + car[0].length + 12))) {
-    const v = num(car[1]);
-    if (v >= 1000 && v <= 20000) out.carManwon = v;
-  }
+  // 자산도 계층마다 달라 여러 값이 나온다. 값이 하나로 모일 때만 쓴다.
+  const collect = (re, lo, hi) => {
+    const found = new Set();
+    for (const m of t.matchAll(re)) {
+      if (!LIMIT_NEAR.test(t.slice(m.index, m.index + m[0].length + 12))) continue;
+      const v = num(m[1]);
+      if (v >= lo && v <= hi) found.add(v);
+    }
+    return [...found];
+  };
+  const assets = collect(/총\s?자산[^0-9]{0,24}([\d,]{3,12})\s*만\s?원/g, 1000, 200000);
+  if (assets.length === 1) out.totalAssetManwon = assets[0];
+  else if (assets.length > 1) out.totalAssetRange = [Math.min(...assets), Math.max(...assets)];
+
+  const cars = collect(/자동차[^0-9]{0,24}([\d,]{3,10})\s*만\s?원/g, 1000, 20000);
+  if (cars.length === 1) out.carManwon = cars[0];
+  else if (cars.length > 1) out.carManwon = Math.max(...cars);   // 자동차는 가장 너그러운 값만 확실하다
 
   // ── 7인 이상 가구 가산액 ──
   // '7인이상의 가구는 6인가구 기준소득금액에 추가 1인당 평균금액 579,278원을 합산'
@@ -71,5 +84,5 @@ export function extractCriteria(text) {
   }
   if (Object.keys(bonus).length) out.newbornBonusPct = bonus;
 
-  return (out.incomePct || out.totalAssetManwon || out.carManwon || out.perExtraPersonWon) ? out : null;
+  return (out.incomePctMax || out.totalAssetManwon || out.carManwon || out.perExtraPersonWon) ? out : null;
 }
