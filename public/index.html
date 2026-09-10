@@ -57,6 +57,11 @@
         <div id="fStatus" class="chips"></div>
       </div>
       <div class="filter-group">
+        <h3>시점</h3>
+        <div id="fFuture" class="chips"></div>
+        <p id="futureNote" class="fineprint" style="margin:6px 0 0"></p>
+      </div>
+      <div class="filter-group">
         <h3>공급기관</h3>
         <div id="fAgency" class="chips"></div>
       </div>
@@ -85,6 +90,9 @@
       </label>
       <label class="toggle">
         <input type="checkbox" id="fIncomeFit"> 소득·자산 초과는 빼고 보기
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="fEligibleOnly"> 내가 신청할 수 있는 것만
       </label>
       <button id="fReset" class="ghost small">필터 초기화</button>
     </aside>

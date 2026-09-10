@@ -113,7 +113,8 @@ export const RULES = {
 
 /** 나이와 특별공급 선택으로 신청 계층을 짐작한다 */
 export function guessTier({ ageYears, special = [] }) {
-  if (special.includes('newlywed') || special.includes('newborn')) return '신혼부부';
+  // 예비신혼부부도 신혼부부 계층으로 본다 — 소득 완화(맞벌이 120%)가 같이 적용된다
+  if (special.includes('newlywed') || special.includes('preNewlywed') || special.includes('newborn')) return '신혼부부';
   if (ageYears != null && ageYears >= 65) return '고령자';
   if (special.includes('youth')) return '청년';
   if (ageYears != null && ageYears <= 39) return '청년';
