@@ -63,11 +63,11 @@ export function extractCriteria(text) {
     }
     return [...found];
   };
-  const assets = collect(/총\s?자산[^0-9]{0,24}([\d,]{3,12})\s*만\s?원/g, 1000, 200000, /자동차|자동차가액/);
+  const assets = collect(/총\s?자산[^0-9]{0,24}([\d,]{3,12})\s*만\s?원/g, 1000, 200000, /자\s*동\s*차/);
   if (assets.length === 1) out.totalAssetManwon = assets[0];
   else if (assets.length > 1) out.totalAssetRange = [Math.min(...assets), Math.max(...assets)];
 
-  const cars = collect(/자동차[^0-9]{0,24}([\d,]{3,10})\s*만\s?원/g, 1000, 20000, /총\s?자산/);
+  const cars = collect(/자\s?동\s?차[^0-9]{0,24}([\d,]{3,10})\s*만\s?원/g, 1000, 20000, null);
   if (cars.length === 1) out.carManwon = cars[0];
   else if (cars.length > 1) out.carManwon = Math.max(...cars);   // 자동차는 가장 너그러운 값만 확실하다
 
