@@ -4,6 +4,7 @@
 //   node build.mjs           (config.json 또는 APPLYHOME_SERVICE_KEY 사용)
 
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getServiceKey } from './store.mjs';
@@ -14,12 +15,33 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
 const OUT = path.join(ROOT, 'docs');
 
+// 브라우저가 index.html 과 app.js 를 서로 다른 시점 것으로 물고 있으면
+// 화면 조각이 어긋나 버튼이 죽는다. 그래서 주소에 내용 해시를 붙여
+// 코드가 바뀌면 반드시 새로 받게 한다.
+const stampAssets = () => {
+  const files = ['app.js', 'styles.css', 'standards.js', 'rank.js', 'sync.js']
+    .filter((f) => fs.existsSync(path.join(OUT, f)));
+  const h = crypto.createHash('sha1');
+  for (const f of files) h.update(fs.readFileSync(path.join(OUT, f)));
+  const v = h.digest('hex').slice(0, 8);
+
+  const idx = path.join(OUT, 'index.html');
+  fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8')
+    .replace(/(href|src)="((?:styles\.css|app\.js))"/g, `$1="$2?v=${v}"`));
+
+  const appJs = path.join(OUT, 'app.js');
+  fs.writeFileSync(appJs, fs.readFileSync(appJs, 'utf8')
+    .replace(/from '\.\/(sync|standards|rank)\.js'/g, `from './$1.js?v=${v}'`));
+  return v;
+};
+
 const copyAssets = () => {
   // 기준표는 standards.mjs 하나만 고치면 되도록, 화면용 사본을 여기서 만든다
   fs.copyFileSync(path.join(ROOT, 'standards.mjs'), path.join(PUBLIC, 'standards.js'));
   fs.mkdirSync(path.join(OUT, 'data'), { recursive: true });
   for (const f of fs.readdirSync(PUBLIC)) fs.copyFileSync(path.join(PUBLIC, f), path.join(OUT, f));
   fs.writeFileSync(path.join(OUT, '.nojekyll'), ''); // _ 로 시작하는 파일도 서빙되게
+  return stampAssets();
 };
 
 // --assets: 화면 코드만 docs/ 로 복사한다. 인증키도, API 호출도 필요 없다.
