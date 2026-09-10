@@ -407,6 +407,13 @@ function renderMeCard() {
 
 // 소득을 어디서 떼어 오는지가 근로소득과 사업소득이 서로 다르다.
 // 공고문 [별표3]이 근거이고, 화면에도 그 근거를 같이 적어 둔다.
+// 종합소득세는 매년 5월에 확정신고한다. 그래서 지금 홈택스에서 뗄 수 있는
+// 가장 최근 과세기간은 5월이 지났으면 작년, 아직이면 재작년이다.
+const bizTaxYear = (() => {
+  const now = new Date();
+  return now.getMonth() + 1 >= 6 ? now.getFullYear() - 1 : now.getFullYear() - 2;
+})();
+
 const INCOME_SRC = {
   work: {
     where: '<a href="https://www.nhis.or.kr" target="_blank" rel="noopener">국민건강보험</a> 「보험료 조회 › <b>직장보험료 조회</b>」',
@@ -415,15 +422,17 @@ const INCOME_SRC = {
     why: '공고문 [별표3] — 상시근로자 소득은 여러 기관 자료 중 <b>①국민건강보험공단</b> 자료를 1순위로 반영합니다.',
   },
   biz: {
-    where: '<a href="https://www.hometax.go.kr" target="_blank" rel="noopener">홈택스</a> 「민원증명 › <b>소득금액증명</b>」',
+    where: '<a href="https://www.hometax.go.kr" target="_blank" rel="noopener">홈택스</a> 로그인 → 「My홈택스 › 민원증명 › <b>소득금액증명</b>」'
+      + '<span class="hint"> (검색창에 “소득금액증명”을 쳐도 바로 갑니다)</span>',
     what: '<b>사업소득금액 ÷ 12</b> — 통장에 들어온 돈이 아니라 <b>필요경비를 뺀 뒤</b>의 금액',
-    when: '<b>전년도 종합소득세 신고분</b> · 연 1회(5월)만 갱신돼 시차가 있습니다',
+    when: `발급 화면의 <b>과세기간</b>에 <b>${bizTaxYear}년</b>(${bizTaxYear}.1.1~${bizTaxYear}.12.31)을 고르세요.`
+      + ' 종합소득세는 5월에 연 1회만 신고해서, 이게 지금 뗄 수 있는 가장 최근 자료입니다.',
     why: '공고문 [별표3] — 프리랜서는 <b>기타사업소득</b>이고, 공적자료는 <b>국세청 종합소득(사업소득)</b>입니다. 건강보험 보수월액은 쓰이지 않습니다.',
   },
   both: {
     where: '건강보험 <b>보수월액</b> + 홈택스 <b>소득금액증명</b>',
     what: '보수월액 <b>＋</b> 사업소득금액 ÷ 12 — 두 값을 <b>더해서</b> 넣습니다',
-    when: '근로분은 현재 월급, 사업분은 전년도 신고분',
+    when: `근로분은 <b>현재 월급</b>, 사업분은 과세기간 <b>${bizTaxYear}년</b> 신고분`,
     why: '공고문 [별표3]은 근로소득·사업소득·재산소득·기타소득 <b>12가지를 합산</b>해 월평균소득을 산정합니다.',
   },
 };
