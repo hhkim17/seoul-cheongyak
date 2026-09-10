@@ -43,6 +43,9 @@ jobs:
             exit 1
           fi
 
+      - name: 의존성 설치
+        run: npm install --no-audit --no-fund --silent
+
       - name: 이전 스냅샷 보관 (새 공고 판별용)
         run: cp docs/data/listings.json /tmp/prev.json 2>/dev/null || echo "이전 스냅샷 없음"
 

@@ -9,3 +9,5 @@ cache/
 node_modules/
 notify/
 .prev-listings.json
+node_modules/
+package-lock.json
