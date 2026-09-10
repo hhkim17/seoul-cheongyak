@@ -227,7 +227,7 @@ let watchCfg = { ...DEFAULT_WATCH, ...JSON.parse(localStorage.getItem('cheongyak
 // 통장·무주택 기간이 쌓이면 순위와 가점이 달라진다. 결혼 시점과 무관하게 미리 본다.
 let futureYears = 0;
 
-let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false, incomeFitOnly: false };
+let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false, incomeFitOnly: false, eligibleOnly2: false };
 let listings = [];
 let meta = {};
 
@@ -262,12 +262,12 @@ function analyze(l) {
   const reasons = [];
   let score = 0;
 
-  // 예산 (35)
-  if (!priced.length) { score += 12; reasons.push({ t: rental ? '임대조건 공고문 확인' : '분양가 미공개' }); }
+  // 예산 (20) — 자격이 1차 관문이므로 비중을 낮춘다
+  if (!priced.length) { score += 7; reasons.push({ t: rental ? '임대조건 공고문 확인' : '분양가 미공개' }); }
   else if (!affordable.length) { reasons.push({ t: `예산 초과 (최저 ${eok(Math.min(...priced.map(priceOf)))})`, neg: true }); }
   else {
     const ratio = affordable.length / priced.length;
-    score += 18 + Math.round(17 * ratio);
+    score += 10 + Math.round(10 * ratio);
     reasons.push({ t: `${rental ? '보증금' : '예산'} 내 ${affordable.length}/${priced.length}개 타입` });
   }
 
@@ -279,33 +279,33 @@ function analyze(l) {
   if (!profile.gu.length) score += 9;
   else if (l.gu && profile.gu.includes(l.gu)) { score += 15; reasons.push({ t: `관심 자치구 · ${l.gu}` }); }
 
-  // 자격 / 당첨 가능성 (25)
+  // 자격 / 당첨 가능성 (40) — 신청할 수 있는지가 가장 중요하다
   if (eligibleSpecial.length) {
-    score += 25;
+    score += 40;
     reasons.push({ t: `특별공급 해당 · ${eligibleSpecial.map((t) => t.label).join('·')}` });
   } else if (rental) {
     // 임대는 가점이 아니라 소득·자산 기준으로 뽑는다
-    if (income.verdict === 'ok') { score += 25; reasons.push({ t: `소득 ${income.myPercent}% — ${income.rule} 기준 ${income.thresholdPercent}% 이내` }); }
-    else if (income.verdict === 'tight') { score += 15; reasons.push({ t: `소득 ${income.myPercent}% — 기준 ${income.thresholdPercent}%에 근접` }); }
+    if (income.verdict === 'ok') { score += 40; reasons.push({ t: `소득 ${income.myPercent}% — ${income.rule} 기준 ${income.thresholdPercent}% 이내` }); }
+    else if (income.verdict === 'tight') { score += 24; reasons.push({ t: `소득 ${income.myPercent}% — 기준 ${income.thresholdPercent}%에 근접` }); }
     else if (income.verdict === 'over') { reasons.push({ t: income.assetOver ? `${income.assetOver} 한도 초과` : `소득 ${income.myPercent}% — 기준 ${income.thresholdPercent}% 초과`, neg: true }); }
-    else { score += 18; reasons.push({ t: '소득·자산 요건 — 공고문 확인 필요' }); }
+    else { score += 28; reasons.push({ t: '소득·자산 요건 — 공고문 확인 필요' }); }
   } else if (l.kind === 'LH_SALE') {
-    score += 16;
+    score += 26;
     reasons.push({ t: 'LH 공공분양 — 소득·자산 요건 있음' });
   } else if (l.kind === 'REMNDR') {
-    score += 20;
+    score += 32;
     reasons.push({ t: '무순위 — 가점 무관 추첨' });
   } else if (l.kind === 'URBTY') {
-    score += 18;
+    score += 29;
     reasons.push({ t: '청약통장 가점 무관 (추첨)' });
   } else {
     const cut = cutlineFor(l);
     if (cut != null) {
       const margin = myScore - cut;
-      score += Math.max(0, Math.min(25, 12 + margin * 1.5));
+      score += Math.max(0, Math.min(40, 19 + margin * 2.4));
       reasons.push({ t: `내 가점 ${myScore} vs ${profile.seoulResident ? '해당지역' : '기타지역'} 커트라인 ${cut}`, neg: margin < 0 });
     } else {
-      score += 10;
+      score += 16;
       reasons.push({ t: `내 가점 ${myScore}점` });
     }
   }
@@ -321,9 +321,12 @@ function analyze(l) {
   const pp = rental ? [] : priced.map(pyeongPrice).filter(Boolean);
   const monthlies = models.map((m) => m.monthlyManwon).filter((v) => v != null);
 
+  // 자격이 분명히 안 되면 아무리 조건이 좋아도 위로 올리지 않는다
+  const capped = (income.verdict === 'over' || rank?.rank === 3) ? Math.min(score, 35) : score;
+
   return {
     status: st,
-    score: Math.max(0, Math.min(100, Math.round(score))),
+    score: Math.max(0, Math.min(100, Math.round(capped))),
     reasons,
     affordable: affordable.length,
     pricedCount: priced.length,
@@ -442,6 +445,19 @@ function passesStatus(a) {
   return a.status.key === 'notice' && wantsOpen;
 }
 
+/**
+ * 자격이 분명히 안 되는 공고인가.
+ * 소득·자산 초과, 순위 3순위, 청년 유형인데 나이가 넘은 경우를 본다.
+ * 판정할 수 없는 것은 '가능'으로 남겨 둔다 — 놓치는 편이 더 나쁘다.
+ */
+function clearlyIneligible(l, a) {
+  if (a.income?.verdict === 'over') return true;
+  const age = futureAge();
+  const youthOnly = /청년|대학생/.test(`${l.kindLabel ?? ''} ${l.name ?? ''}`);
+  if (youthOnly && age != null && age > 39) return true;
+  return false;
+}
+
 /** 당첨자 발표·서류심사 안내 같은 후속 공지는 기본으로 감춘다 */
 const isRecruit = (l) => !l.noticeKind || l.noticeKind === '모집';
 const visibleKind = (l) => filters.showAnnouncements || isRecruit(l);
@@ -494,6 +510,7 @@ function visible() {
       if (filters.budgetOnly && a.pricedCount > 0 && a.affordable === 0) return false;
       if (filters.eligibleOnly && !a.eligibleSpecial.length) return false;
       if (filters.incomeFitOnly && a.income?.verdict === 'over') return false;
+      if (filters.eligibleOnly && clearlyIneligible(l, a)) return false;
       return true;
     })
     .sort((x, y) => {
