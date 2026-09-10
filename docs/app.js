@@ -1,7 +1,7 @@
 // 서울 청약 대시보드 — 프론트엔드
-import * as Sync from './sync.js?v=21834c6e';
-import * as Std from './standards.js?v=21834c6e';
-import * as Rank from './rank.js?v=21834c6e';
+import * as Sync from './sync.js?v=9d648ba3';
+import * as Std from './standards.js?v=9d648ba3';
+import * as Rank from './rank.js?v=9d648ba3';
 
 const $ = (s) => document.querySelector(s);
 // 화면 조각이 하나라도 빠져 있으면(브라우저에 남은 옛 HTML 등) 예외가 나서
@@ -210,6 +210,7 @@ const DEFAULT_PROFILE = {
   realEstateManwon: null, carManwon: null, dualIncome: false,
   budgetEok: 9, areaMin: 49, areaMax: 99,
   special: [], gu: [], seoulResident: true,
+  incomeKind: 'work',   // work=근로 · biz=사업(프리랜서) · both
 };
 let profile = { ...DEFAULT_PROFILE, ...JSON.parse(localStorage.getItem('cheongyak.profile') || '{}') };
 const saveProfile = () => localStorage.setItem('cheongyak.profile', JSON.stringify(profile));
@@ -402,6 +403,43 @@ function renderMeCard() {
     <div class="row" style="margin-top:8px;border-top:1px solid var(--line-soft);padding-top:8px">
       <span>예산</span><b>${profile.budgetEok}억</b></div>
     <div class="row"><span>선호 전용</span><b>${profile.areaMin}~${profile.areaMax}㎡</b></div>`;
+}
+
+// 소득을 어디서 떼어 오는지가 근로소득과 사업소득이 서로 다르다.
+// 공고문 [별표3]이 근거이고, 화면에도 그 근거를 같이 적어 둔다.
+const INCOME_SRC = {
+  work: {
+    where: '<a href="https://www.nhis.or.kr" target="_blank" rel="noopener">국민건강보험</a> 「보험료 조회 › <b>직장보험료 조회</b>」',
+    what: '<b>보수월액</b> — 세전 월급',
+    when: '<b>공고일 시점</b> · 지금 받는 월급 기준',
+    why: '공고문 [별표3] — 상시근로자 소득은 여러 기관 자료 중 <b>①국민건강보험공단</b> 자료를 1순위로 반영합니다.',
+  },
+  biz: {
+    where: '<a href="https://www.hometax.go.kr" target="_blank" rel="noopener">홈택스</a> 「민원증명 › <b>소득금액증명</b>」',
+    what: '<b>사업소득금액 ÷ 12</b> — 통장에 들어온 돈이 아니라 <b>필요경비를 뺀 뒤</b>의 금액',
+    when: '<b>전년도 종합소득세 신고분</b> · 연 1회(5월)만 갱신돼 시차가 있습니다',
+    why: '공고문 [별표3] — 프리랜서는 <b>기타사업소득</b>이고, 공적자료는 <b>국세청 종합소득(사업소득)</b>입니다. 건강보험 보수월액은 쓰이지 않습니다.',
+  },
+  both: {
+    where: '건강보험 <b>보수월액</b> + 홈택스 <b>소득금액증명</b>',
+    what: '보수월액 <b>＋</b> 사업소득금액 ÷ 12 — 두 값을 <b>더해서</b> 넣습니다',
+    when: '근로분은 현재 월급, 사업분은 전년도 신고분',
+    why: '공고문 [별표3]은 근로소득·사업소득·재산소득·기타소득 <b>12가지를 합산</b>해 월평균소득을 산정합니다.',
+  },
+};
+
+function renderIncomeSrc() {
+  const box = $('#incomeSrc');
+  const row = $('#pIncomeKind');
+  if (!box || !row) return;
+  const kind = INCOME_SRC[profile.incomeKind] ? profile.incomeKind : 'work';
+  for (const b of row.querySelectorAll('.chip')) b.classList.toggle('on', b.dataset.kind === kind);
+  const g = INCOME_SRC[kind];
+  box.innerHTML = `<dl>
+    <dt>어디서</dt><dd>${g.where}</dd>
+    <dt>넣을 값</dt><dd>${g.what}</dd>
+    <dt>기간</dt><dd>${g.when}</dd>
+  </dl><p class="why">${g.why}</p>`;
 }
 
 function chipRow(container, options, selected, onToggle) {
@@ -835,6 +873,7 @@ function openProfile() {
   setChk('#pSeoulResident', profile.seoulResident);
   try {
     renderProfileChips();
+    renderIncomeSrc();
     updateScoreOut();
     updateIncomeOut();
   } catch (e) {
