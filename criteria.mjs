@@ -50,20 +50,24 @@ export function extractCriteria(text) {
 
   // ── 자산 한도 ──
   // 자산도 계층마다 달라 여러 값이 나온다. 값이 하나로 모일 때만 쓴다.
-  const collect = (re, lo, hi) => {
+  // 표에서는 '총자산가액 자동차가액' 처럼 열 이름이 나란히 붙어, 옆 열 숫자를 잘못 집기 쉽다.
+  // 낱말과 숫자 사이에 다른 항목 이름이 끼면 버린다.
+  const collect = (re, lo, hi, forbid) => {
     const found = new Set();
     for (const m of t.matchAll(re)) {
+      const gap = m[0].slice(0, m[0].indexOf(m[1]));
+      if (forbid && forbid.test(gap)) continue;
       if (!LIMIT_NEAR.test(t.slice(m.index, m.index + m[0].length + 12))) continue;
       const v = num(m[1]);
       if (v >= lo && v <= hi) found.add(v);
     }
     return [...found];
   };
-  const assets = collect(/총\s?자산[^0-9]{0,24}([\d,]{3,12})\s*만\s?원/g, 1000, 200000);
+  const assets = collect(/총\s?자산[^0-9]{0,24}([\d,]{3,12})\s*만\s?원/g, 1000, 200000, /자동차|자동차가액/);
   if (assets.length === 1) out.totalAssetManwon = assets[0];
   else if (assets.length > 1) out.totalAssetRange = [Math.min(...assets), Math.max(...assets)];
 
-  const cars = collect(/자동차[^0-9]{0,24}([\d,]{3,10})\s*만\s?원/g, 1000, 20000);
+  const cars = collect(/자동차[^0-9]{0,24}([\d,]{3,10})\s*만\s?원/g, 1000, 20000, /총\s?자산/);
   if (cars.length === 1) out.carManwon = cars[0];
   else if (cars.length > 1) out.carManwon = Math.max(...cars);   // 자동차는 가장 너그러운 값만 확실하다
 
