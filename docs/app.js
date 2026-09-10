@@ -1,7 +1,7 @@
 // 서울 청약 대시보드 — 프론트엔드
-import * as Sync from './sync.js?v=9d648ba3';
-import * as Std from './standards.js?v=9d648ba3';
-import * as Rank from './rank.js?v=9d648ba3';
+import * as Sync from './sync.js?v=291341a9';
+import * as Std from './standards.js?v=291341a9';
+import * as Rank from './rank.js?v=291341a9';
 
 const $ = (s) => document.querySelector(s);
 // 화면 조각이 하나라도 빠져 있으면(브라우저에 남은 옛 HTML 등) 예외가 나서
@@ -1178,6 +1178,13 @@ $('#keyInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#k
 
 $('#btnRefresh').onclick = () => load(true);   // 목록만 다시 받기 (빠름)
 if ($('#btnProfile')) $('#btnProfile').onclick = openProfile;
+
+if ($('#pIncomeKind')) $('#pIncomeKind').onclick = (e) => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  profile.incomeKind = b.dataset.kind;
+  renderIncomeSrc();
+};
 $('#btnMail').onclick = openMail;
 $('#btnAuth').onclick = openAuth;
 
@@ -1256,6 +1263,7 @@ $('#pSave').onclick = () => {
     areaMin: +valOf('#pAreaMin') || 0,
     areaMax: +valOf('#pAreaMax') || 999,
     seoulResident: chkOf('#pSeoulResident'),
+    incomeKind: profile.incomeKind,
   };
   cutlineCache = null;   // 거주지 기준이 바뀌면 커트라인도 다시 잡는다
   saveProfile();

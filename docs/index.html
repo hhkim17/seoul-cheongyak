@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>서울 청약 대시보드</title>
-<link rel="stylesheet" href="styles.css?v=9d648ba3">
+<link rel="stylesheet" href="styles.css?v=291341a9">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🏙️</text></svg>">
 </head>
 <body>
@@ -314,10 +314,21 @@
       <details class="help">
         <summary>내 소득·자산은 어디서 확인하나요?</summary>
         <ul>
-          <li><b>소득</b> — <a href="https://www.nhis.or.kr" target="_blank" rel="noopener">국민건강보험</a> 「민원여기요 › 보험료 조회」의 <b>보수월액</b>이 가장 빠릅니다.
-            공사가 소득을 조회할 때도 이 값을 1순위로 봅니다. 정확한 세전 총급여는
-            <a href="https://www.hometax.go.kr" target="_blank" rel="noopener">홈택스</a>(모바일은 손택스)
-            「지급명세서 › 근로소득」에서 전년도 총급여를 12로 나눕니다.</li>
+          <li><b>소득</b> — <b>근로소득이냐 사업소득이냐에 따라 확인하는 곳이 다릅니다.</b>
+            위 「내 소득은 어떤 소득인가요?」에서 고르면 그때그때 알려 줍니다.
+            <ul>
+              <li><b>직장인</b> — <a href="https://www.nhis.or.kr" target="_blank" rel="noopener">국민건강보험</a>
+                「보험료 조회 › <b>직장보험료 조회</b>」의 <b>보수월액</b>. 공고문 [별표3]은
+                <b>상시근로자</b> 소득을 조회할 때 건강보험공단 자료를 1순위로 본다고 적고 있습니다.</li>
+              <li><b>프리랜서·개인사업자</b> — <a href="https://www.hometax.go.kr" target="_blank" rel="noopener">홈택스</a>
+                「민원증명 › <b>소득금액증명</b>」의 <b>사업소득금액을 12로 나눕니다</b>.
+                3.3% 떼고 입금된 총액이 아니라 <b>필요경비를 뺀 금액</b>이라, 통장 기준보다 대개 낮게 잡힙니다.
+                건강보험 보수월액은 쓰이지 않습니다 — 공고문이 프리랜서를 <b>기타사업소득</b>으로 분류하고
+                공적자료를 <b>국세청 종합소득</b>으로 지정하고 있습니다.
+                이 자료는 5월 종합소득세 신고 때 연 1회만 갱신돼 <b>전년도 소득</b>이 기준이 됩니다.</li>
+              <li><b>「보수외소득월액」 탭은 급여가 아닙니다</b> — 이자·배당·임대처럼 급여 <b>외</b> 소득에 붙는
+                보험료 화면이라, 월급이나 프리랜서 수입을 여기서 찾으면 안 됩니다.</li>
+            </ul></li>
           <li><b>금융자산·부채</b> — <a href="https://fine.fss.or.kr" target="_blank" rel="noopener">금융감독원 파인</a>의
             「내 계좌 한눈에」·「내 대출 한눈에」. <b>총자산은 부채를 뺀 금액</b>입니다.</li>
           <li><b>부동산</b> — <a href="https://www.realtyprice.kr" target="_blank" rel="noopener">부동산공시가격 알리미</a>.
@@ -379,6 +390,6 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=9d648ba3"></script>
+<script type="module" src="app.js?v=291341a9"></script>
 </body>
 </html>
