@@ -1,0 +1,9 @@
+{
+  "name": "seoul-cheongyak",
+  "private": true,
+  "type": "module",
+  "description": "서울 청약 대시보드 — 공고 수집·정적 사이트 빌드",
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38"
+  }
+}
