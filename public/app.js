@@ -833,9 +833,13 @@ function openProfile() {
   setVal('#pAreaMin', profile.areaMin);
   setVal('#pAreaMax', profile.areaMax);
   setChk('#pSeoulResident', profile.seoulResident);
-  renderProfileChips();
-  updateScoreOut();
-  updateIncomeOut();
+  try {
+    renderProfileChips();
+    updateScoreOut();
+    updateIncomeOut();
+  } catch (e) {
+    console.error('내 조건 창을 채우다 실패했습니다', e);   // 창은 그래도 연다
+  }
   $('#profileModal').hidden = false;
 }
 
@@ -1134,7 +1138,7 @@ $('#keySave').onclick = async () => {
 $('#keyInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#keySave').click(); });
 
 $('#btnRefresh').onclick = () => load(true);   // 목록만 다시 받기 (빠름)
-$('#btnProfile').onclick = openProfile;
+if ($('#btnProfile')) $('#btnProfile').onclick = openProfile;
 $('#btnMail').onclick = openMail;
 $('#btnAuth').onclick = openAuth;
 
