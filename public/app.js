@@ -407,7 +407,31 @@ function chipRow(container, options, selected, onToggle) {
   }
 }
 
+const FUTURE_OPTIONS = [
+  { key: '0', label: '지금' }, { key: '1', label: '+1년' }, { key: '2', label: '+2년' }, { key: '3', label: '+3년' },
+];
+
+function renderFuture() {
+  chipRow($('#fFuture'), FUTURE_OPTIONS, [String(futureYears)], (k) => {
+    futureYears = Number(k);
+    cutlineCache = null;
+    renderAll();
+  });
+
+  const note = $('#futureNote');
+  if (!futureYears) { note.textContent = ''; return; }
+  const age = futureAge();
+  const lines = [`통장 ${Math.floor(shift(accountYearsOf(profile), 1))}년`];
+  if (profile.payments != null) lines.push(`납입 ${shift(profile.payments, 12)}회`);
+  lines.push(`무주택 ${Math.floor(shift(noHouseYearsOf(profile), 1))}년`);
+  note.innerHTML = `${futureYears}년 뒤 기준 · ${lines.join(' · ')} <span class="hint">(매월 납입 가정)</span>`
+    + (age != null && age > 39
+      ? `<br><b style="color:var(--hot)">만 ${age}세 — 청년 유형 신청 자격이 사라집니다.</b>`
+      : (age != null && age >= 37 ? `<br><b style="color:var(--warn)">만 ${age}세 — 청년 자격(만 39세)이 얼마 안 남았습니다.</b>` : ''));
+}
+
 function renderFilters() {
+  renderFuture();
   chipRow($('#fStatus'), STATUSES, filters.status, (k) => { toggle(filters.status, k); renderAll(); });
   const agencies = [...new Set(listings.map(agencyOf))].sort().map((a) => ({ key: a, label: a }));
   chipRow($('#fAgency'), agencies, filters.agency, (k) => { toggle(filters.agency, k); renderAll(); });
@@ -418,6 +442,7 @@ function renderFilters() {
   $('#fEligible').checked = filters.eligibleOnly;
   $('#fAnnounce').checked = filters.showAnnouncements;
   $('#fIncomeFit').checked = filters.incomeFitOnly;
+  $('#fEligibleOnly').checked = filters.eligibleOnly2;
 }
 const toggle = (arr, k) => { const i = arr.indexOf(k); i < 0 ? arr.push(k) : arr.splice(i, 1); };
 
@@ -510,7 +535,7 @@ function visible() {
       if (filters.budgetOnly && a.pricedCount > 0 && a.affordable === 0) return false;
       if (filters.eligibleOnly && !a.eligibleSpecial.length) return false;
       if (filters.incomeFitOnly && a.income?.verdict === 'over') return false;
-      if (filters.eligibleOnly && clearlyIneligible(l, a)) return false;
+      if (filters.eligibleOnly2 && clearlyIneligible(l, a)) return false;
       return true;
     })
     .sort((x, y) => {
@@ -585,7 +610,8 @@ function cardOf(l, a) {
       <div><span>전용면적</span><b>${a.minArea != null ? `${a.minArea} ~ ${a.maxArea}㎡` : '—'}</b></div>
       <div><span>${st.key === 'notice' ? '공고일' : st.key === 'done' ? '당첨발표' : '주요 일정'}</span><b>${fmtDate(st.until)}</b></div>
     </div>
-    <div class="reasons">${a.reasons.slice(0, 3).map((r) => `<span class="reason${r.neg ? ' neg' : ''}">${esc(r.t)}</span>`).join('')}</div>`;
+    <div class="reasons">${a.reasons.slice(0, 3).map((r) => `<span class="reason${r.neg ? ' neg' : ''}">${esc(r.t)}</span>`).join('')}
+      ${a.rank?.need ? `<span class="reason neg">${esc(a.rank.need)}</span>` : ''}</div>`;
   if (a.income?.verdict === 'over') c.classList.add('dim');
   c.onclick = (e) => {
     const id = e.target.closest('[data-scrap]')?.dataset.scrap;
@@ -1144,6 +1170,7 @@ $('#fBudget').onchange = (e) => { filters.budgetOnly = e.target.checked; renderC
 $('#fEligible').onchange = (e) => { filters.eligibleOnly = e.target.checked; renderCards(); };
 $('#fAnnounce').onchange = (e) => { filters.showAnnouncements = e.target.checked; renderAll(); };
 $('#fIncomeFit').onchange = (e) => { filters.incomeFitOnly = e.target.checked; renderCards(); };
+$('#fEligibleOnly').onchange = (e) => { filters.eligibleOnly2 = e.target.checked; renderCards(); };
 let searchTimer = null;
 $('#fSearch').oninput = (e) => {
   filters.q = e.target.value;
