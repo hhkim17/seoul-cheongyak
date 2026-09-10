@@ -4,6 +4,7 @@ import { api } from './api.mjs';
 import * as LH from './lh.mjs';
 import { myhome } from './myhome.mjs';
 import { isTransient } from './net.mjs';
+import { extractCriteria } from './criteria.mjs';
 import { scrapeSh, scrapeHug, scrapeIncomeStandard, scrapeMedianIncome } from './scrape.mjs';
 import * as N from './normalize.mjs';
 import { cacheGet, cacheSet } from './store.mjs';
@@ -275,6 +276,9 @@ export async function enrich(key, listing, { withCmpet }) {
         });
       }
       out.attachments = N.lhFilesOf(LH.pickArray(json, LH.isFileRow));
+      // 상세 응답의 안내문에 소득·자산 기준이 적혀 있는 경우가 있다
+      const c = extractCriteria(JSON.stringify(json));
+      if (c) out.criteria = { ...c, from: 'LH 공고 상세' };
       const complex = LH.pickArray(json, LH.isComplexRow)[0];
       if (complex) {
         out.address = [complex.LGDN_ADR, complex.LGDN_DTL_ADR].filter(Boolean).join(' ').trim();

@@ -129,8 +129,28 @@ const won = (manwon) => (manwon == null ? null : manwon * 10000);
  */
 export function evaluate(listing, p, std) {
   const key = ruleKeyOf(listing);
-  const rule = key && RULES[key];
-  const out = { rule: rule?.label ?? null, note: rule?.note ?? null, source: rule?.source ?? null, verdict: 'unknown' };
+  let rule = key && RULES[key];
+
+  // 공고문에서 직접 읽은 기준이 있으면 그것이 우선이다 — 제도 기본값보다 정확하다
+  const c = listing.criteria;
+  if (c?.incomePct) {
+    rule = {
+      label: `${rule?.label ?? '이 공고'} (공고문 기준)`,
+      verified: true,
+      basis: c.incomeBasis === 'median' ? 'median' : 'urban',
+      income: { pct: c.incomePct },
+      assets: c.totalAssetManwon ? { 일반: c.totalAssetManwon } : rule?.assets,
+      soloAssetTiers: rule?.soloAssetTiers,
+      car: c.carManwon ?? rule?.car ?? null,
+      source: rule?.source ?? null,
+      note: `${c.from ?? '공고문'}에서 읽은 기준입니다 — ${c.incomeBasis === 'median' ? '기준 중위소득' : '도시근로자 월평균소득'} ${c.incomePcts.join('% · ')}%.`
+        + (rule?.note ? ` (일반 안내: ${rule.note})` : ''),
+      fromNotice: true,
+    };
+  }
+
+  const out = { rule: rule?.label ?? null, note: rule?.note ?? null, source: rule?.source ?? null,
+                fromNotice: !!rule?.fromNotice, verdict: 'unknown' };
   if (!rule) return out;
 
   // 소득 기준이 없는 유형(든든전세·영구임대)

@@ -483,6 +483,7 @@ export function normalizeSh(r) {
     homepage: 'https://www.i-sh.co.kr/', noticeUrl: r.url,
     subType: r.dept, scheduleUnknown: !r.receiptStart,
     noticeKind: r.noticeKind || classifyNotice(r.title),   // 모집 / 발표 / 안내
+    criteria: r.criteria || null,   // 공고문에서 직접 읽은 소득·자산 기준
     attachments: [], models: [], cmpet: null, score: null, flags: {},
   };
 }

@@ -2,6 +2,7 @@
 // robots.txt에서 허용된 공개 목록 페이지만 보고, 요청 간격을 두며, 실패해도 앱 전체는 계속 돈다.
 
 import { fetchRetry } from './net.mjs';
+import { extractCriteria } from './criteria.mjs';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
 
@@ -109,9 +110,13 @@ async function fillPeriods(rows, limit) {
   for (const r of targets) {
     try {
       const html = await get(r.url);
-      const period = extractPeriod(strip(html));
+      const text = strip(html);
+      const period = extractPeriod(text);
       if (period?.from) { r.receiptStart = period.from; r.receiptEnd = period.to; }
       if (period?.resultDate) r.resultDate = period.resultDate;
+      // 같은 페이지에서 소득·자산 기준도 함께 읽는다 (추가 요청이 들지 않는다)
+      const c = extractCriteria(text);
+      if (c) r.criteria = { ...c, from: '공고 본문' };
     } catch { /* 한 건 실패해도 나머지는 계속 */ }
     await new Promise((res) => setTimeout(res, 600));
   }
