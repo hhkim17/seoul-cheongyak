@@ -237,9 +237,10 @@ function analyze(l) {
   const st = statusOf(l);
   const income = incomeCheck(l);
 
-  const areas = (l.models || []).map((m) => m.exclusiveArea).filter((a) => a != null);
-  const inPref = areas.filter((a) => a >= profile.areaMin && a <= profile.areaMax);
-  const rankArea = (inPref.length ? Math.min(...inPref) : (areas.length ? Math.min(...areas) : null));
+  // 순위는 신청 면적에 따라 갈린다 — 선호 범위 안의 주택형, 없으면 가장 작은 것으로 본다
+  const allAreas = (l.models || []).map((m) => m.exclusiveArea).filter((a) => a != null);
+  const prefAreas = allAreas.filter((a) => a >= profile.areaMin && a <= profile.areaMax);
+  const rankArea = prefAreas.length ? Math.min(...prefAreas) : (allAreas.length ? Math.min(...allAreas) : null);
   const rank = Rank.judgeRank(l, {
     accountYears: accountYearsOf(profile),
     payments: profile.payments,
