@@ -286,3 +286,13 @@ mark { background: color-mix(in srgb, var(--warn) 35%, transparent); color: inhe
 details.help table { font-size: 12px; }
 details.help td { vertical-align: top; text-align: left; }
 details.help th { text-align: left; }
+
+/* ── 소득 출처 안내 ───────────────────────── */
+.src-guide { margin-top: 10px; padding: 11px 13px; background: var(--bg-3); border-radius: 8px; border-left: 3px solid var(--accent); font-size: 13px; }
+.src-guide dl { display: grid; grid-template-columns: 58px 1fr; gap: 5px 10px; margin: 0; }
+.src-guide dt { color: var(--text-3); font-size: 12px; }
+.src-guide dd { margin: 0; color: var(--text-2); }
+.src-guide dd b { color: var(--text-1); }
+.src-guide .why { margin: 9px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-3); }
+.src-guide a { color: var(--accent); }
+@media (max-width: 560px) { .src-guide dl { grid-template-columns: 1fr; gap: 2px; } .src-guide dt { margin-top: 6px; } }

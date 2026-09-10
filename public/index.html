@@ -263,6 +263,16 @@
           <input id="pNewborn" type="number" min="0" max="6" step="1" placeholder="없으면 0">
         </label>
       </div>
+      <div class="incomekind" style="margin-top:14px">
+        <p class="colhead">내 소득은 어떤 소득인가요? <span class="hint">확인하는 곳이 다릅니다</span></p>
+        <div class="chips" id="pIncomeKind">
+          <button type="button" class="chip" data-kind="work">근로소득 <span class="hint">직장인</span></button>
+          <button type="button" class="chip" data-kind="biz">사업소득 <span class="hint">프리랜서·개인사업자</span></button>
+          <button type="button" class="chip" data-kind="both">둘 다 있음</button>
+        </div>
+        <div id="incomeSrc" class="src-guide"></div>
+      </div>
+
       <div class="grid2" style="margin-top:12px">
         <div>
           <p class="colhead">세대 기준 <span class="hint">세대원 합산</span></p>
