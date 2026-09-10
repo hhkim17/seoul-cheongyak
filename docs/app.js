@@ -1,6 +1,7 @@
 // 서울 청약 대시보드 — 프론트엔드
 import * as Sync from './sync.js';
 import * as Std from './standards.js';
+import * as Rank from './rank.js';
 
 const $ = (s) => document.querySelector(s);
 const el = (t, cls, html) => { const e = document.createElement(t); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -188,6 +189,7 @@ function statusOf(l) {
 // ── 프로필 ───────────────────────────────────────────────────────────
 const DEFAULT_PROFILE = {
   birthYm: '', marriageDate: '', noHouseSince: '', accountYm: '', family: 0, householdCount: null, newbornCount: 0,
+  payments: null, depositManwon: null, isGangnam3: true,
   incomeManwon: null, soloIncomeManwon: null, assetManwon: null, soloAssetManwon: null,
   realEstateManwon: null, carManwon: null, dualIncome: false,
   budgetEok: 9, areaMin: 49, areaMax: 99,
@@ -234,6 +236,16 @@ function analyze(l) {
 
   const st = statusOf(l);
   const income = incomeCheck(l);
+
+  const areas = (l.models || []).map((m) => m.exclusiveArea).filter((a) => a != null);
+  const inPref = areas.filter((a) => a >= profile.areaMin && a <= profile.areaMax);
+  const rankArea = (inPref.length ? Math.min(...inPref) : (areas.length ? Math.min(...areas) : null));
+  const rank = Rank.judgeRank(l, {
+    accountYears: accountYearsOf(profile),
+    payments: profile.payments,
+    depositManwon: profile.depositManwon,
+    isGangnam3: profile.isGangnam3,
+  }, rankArea);
   const reasons = [];
   let score = 0;
 
@@ -309,6 +321,7 @@ function analyze(l) {
     pyeong: pp.length ? Math.round(pp.reduce((a, b) => a + b, 0) / pp.length) : null,
     rental,
     income,
+    rank,
     minMonthly: monthlies.length ? Math.min(...monthlies) : null,
     maxMonthly: monthlies.length ? Math.max(...monthlies) : null,
     eligibleSpecial,
@@ -526,6 +539,9 @@ function cardOf(l, a) {
       ${l.flags?.priceCap ? '<span class="badge">분양가상한제</span>' : ''}
       ${l.flags?.speculative ? '<span class="badge hot">투기과열</span>' : ''}
       ${a.cmpetAvg != null ? `<span class="badge ${a.cmpetAvg >= 20 ? 'hot' : ''}">경쟁률 ${a.cmpetAvg}:1</span>` : ''}
+      ${a.rank?.rank === 1 ? '<span class="verdict ok">1순위</span>'
+        : a.rank?.rank === 2 ? '<span class="verdict tight">2순위</span>'
+        : a.rank?.rank === 3 ? '<span class="verdict over">3순위</span>' : ''}
       ${a.income?.verdict === 'nolimit' ? '<span class="verdict ok">소득·자산 기준 없음</span>'
         : a.income?.verdict === 'ok' ? `<span class="verdict ok">${a.income.bySolo ? '청년 기준 이내' : '소득 기준 이내'}</span>`
         : a.income?.verdict === 'tight' ? `<span class="verdict tight">${a.income.bySolo ? '청년 기준 아슬아슬' : '소득 기준 아슬아슬'}</span>`
@@ -653,6 +669,15 @@ function drawerHTML(l, a) {
     ${l.flags?.regulated ? '<span class="badge hot">조정대상지역</span>' : ''}
   </div>
 
+  ${a.rank ? `<section>
+    <h3>일반공급 순위</h3>
+    <p class="lead small">
+      ${a.rank.rank ? `<span class="verdict ${a.rank.rank === 1 ? 'ok' : a.rank.rank === 2 ? 'tight' : 'over'}">${esc(a.rank.label)}</span>` : `<span class="verdict tight">${esc(a.rank.label)}</span>`}
+      &nbsp; ${esc(a.rank.why)}
+      ${a.rank.need ? `<br><span class="fineprint">${esc(a.rank.need)}</span>` : ''}
+    </p>
+  </section>` : ''}
+
   ${a.income?.verdict === 'nolimit' ? `<section>
     <h3>소득 · 자산 기준</h3>
     <p class="lead small"><span class="verdict ok">기준 없음</span> &nbsp; ${esc(a.income.note ?? '')}</p>
@@ -733,6 +758,9 @@ function openProfile() {
   $('#pFamily').value = profile.family;
   $('#pHousehold').value = profile.householdCount ?? '';
   $('#pNewborn').value = profile.newbornCount ?? '';
+  $('#pPayments').value = profile.payments ?? '';
+  $('#pDeposit').value = profile.depositManwon ?? '';
+  $('#pGangnam3').checked = profile.isGangnam3 !== false;
   $('#pIncome').value = profile.incomeManwon ?? '';
   $('#pSolo').value = profile.soloIncomeManwon ?? '';
   $('#pSoloAsset').value = profile.soloAssetManwon ?? '';
@@ -765,6 +793,9 @@ function formFromModal() {
     family: +$('#pFamily').value || 0,
     householdCount: $('#pHousehold').value === '' ? null : Number($('#pHousehold').value),
     newbornCount: $('#pNewborn').value === '' ? 0 : Number($('#pNewborn').value),
+    payments: $('#pPayments').value === '' ? null : Number($('#pPayments').value),
+    depositManwon: $('#pDeposit').value === '' ? null : Number($('#pDeposit').value),
+    isGangnam3: $('#pGangnam3').checked,
   };
 }
 
