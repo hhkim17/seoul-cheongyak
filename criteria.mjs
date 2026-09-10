@@ -63,7 +63,14 @@ export function extractCriteria(text) {
     }
     return [...found];
   };
-  const assets = collect(/총\s?자산[^0-9]{0,24}([\d,]{3,12})\s*만\s?원/g, 1000, 200000, /자\s*동\s*차/);
+  // '3억4,500만원'처럼 억 단위가 섞인 표기를 먼저 처리한다
+  const eok = [];
+  for (const m of t.matchAll(/총\s?자산[^0-9억]{0,24}(\d{1,2})\s*억\s*([\d,]{0,7})\s*만?\s?원?/g)) {
+    if (/자\s*동\s*차/.test(m[0])) continue;
+    const v = Number(m[1]) * 10000 + (m[2] ? num(m[2]) : 0);
+    if (v >= 1000 && v <= 200000) eok.push(v);
+  }
+  const assets = [...new Set([...eok, ...collect(/총\s?자산[^0-9]{0,24}([\d,]{3,12})\s*만\s?원/g, 1000, 200000, /자\s*동\s*차/)])];
   if (assets.length === 1) out.totalAssetManwon = assets[0];
   else if (assets.length > 1) out.totalAssetRange = [Math.min(...assets), Math.max(...assets)];
 
