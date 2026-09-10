@@ -244,8 +244,12 @@ export async function enrich(key, listing, { withCmpet }) {
 
   // 마이홈 통합 공고는 목록 자체가 전부다. 상세는 공고 원문 링크로 넘긴다.
   // 마이홈·SH·HUG는 목록이 곧 전부다. 상세는 공고 원문 링크로 넘긴다.
+  // 마이홈·SH·HUG는 목록 수집 단계에서 채운 것이 전부다.
+  // 여기서 빈 값으로 덮어쓰지 않도록 그대로 물려준다.
   if (isMyhome(kind) || kind === 'SH' || kind === 'HUG') {
     if (listing.models?.length) out.models = listing.models;
+    if (listing.attachments?.length) out.attachments = listing.attachments;
+    if (listing.criteria) out.criteria = listing.criteria;
     cacheSet(cacheKey, out); return out;
   }
 
@@ -320,7 +324,7 @@ export async function enrich(key, listing, { withCmpet }) {
  */
 export async function readCriteriaFromPdf(listing) {
   if (listing.criteria) return listing.criteria;
-  const pdf = pickNoticePdf(listing.attachments);
+  const pdf = pickNoticePdf((listing.attachments || []).filter((f) => !f.viewer));
   if (!pdf) return null;
   const cacheKey = `criteria_${listing.id}`;
   const hit = cacheGet(cacheKey, 30 * 24 * 60 * 60 * 1000);   // 공고문은 바뀌지 않는다 — 오래 둔다
@@ -367,7 +371,8 @@ export async function enrichMany(key, targets, onProgress) {
 /** 모집공고 중 기준을 아직 모르는 것만 골라 공고문을 읽는다 */
 export async function readCriteriaMany(listings, onProgress) {
   const targets = listings.filter((l) => !l.criteria && l.noticeKind !== '발표' && l.noticeKind !== '안내'
-    && pickNoticePdf(l.attachments));
+    // 기관 문서뷰어 주소는 PDF 파일이 아니라 뷰어 화면이라 글자를 못 읽는다
+    && pickNoticePdf((l.attachments || []).filter((f) => !f.viewer)));
   if (!targets.length) return 0;
   log(`공고문에서 기준 읽기 (${targets.length}건)`);
   let found = 0, done = 0;

@@ -609,12 +609,14 @@ function drawerHTML(l, a) {
     const hwp = /\.hwpx?(\?|$)/i.test(f.url) || /\.hwpx?$/i.test(f.name);
     // 기관 서버가 첨부를 모두 attachment로 내려보내 브라우저 미리보기가 막힌다.
     // PDF는 구글 뷰어를 거쳐 웹에서 바로 읽고, 한글 파일은 그대로 내려받는다.
-    const href = pdf ? `https://docs.google.com/viewer?embedded=true&url=${encodeURIComponent(f.url)}` : f.url;
+    // 기관이 문서뷰어를 제공하면(SH) 그대로 쓰고, 아니면 PDF만 구글 뷰어를 거친다
+    const href = f.viewer ? f.url
+      : pdf ? `https://docs.google.com/viewer?embedded=true&url=${encodeURIComponent(f.url)}` : f.url;
     return `<a class="file" href="${esc(href)}" target="_blank" rel="noopener">
       <span class="ico">${pdf ? '📕' : hwp ? '📘' : '📄'}</span>
       <span class="nm">${esc(f.name)}${!pdf && pdfKeys.has(fileKey(f.name)) ? ' <span class="dupe">· 위 PDF와 같은 문서</span>' : ''}</span>
-      <span class="go">${pdf ? '미리보기' : '내려받기'} ↗</span>
-      ${pdf ? `<span class="alt" data-dl="${esc(f.url)}" title="파일로 내려받기">⤓</span>` : ''}
+      <span class="go">${f.viewer || pdf ? '미리보기' : '내려받기'} ↗</span>
+      ${pdf && !f.viewer ? `<span class="alt" data-dl="${esc(f.url)}" title="파일로 내려받기">⤓</span>` : ''}
     </a>`;
   }).join('')}</div></section>` : '';
 

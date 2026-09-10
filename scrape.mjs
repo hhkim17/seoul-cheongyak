@@ -104,6 +104,21 @@ export function extractPeriod(text) {
   };
 }
 
+/**
+ * SH 첨부. 내려받기 주소는 자바스크립트 뒤에 숨어 있지만, 미리보기용 문서뷰어 주소는 노출된다.
+ * 이 뷰어는 PDF와 한글 파일을 모두 웹에서 열어 주므로 그대로 쓴다.
+ */
+function shAttachments(html, seq) {
+  // 페이지에 확장자 아이콘 견본이 주석으로 들어 있어 그대로 긁으면 '.pdf'만 나온다
+  const clean = html.replace(/<!--[\s\S]*?-->/g, ' ');
+  const names = [...clean.matchAll(/class="btnAttach[^"]*"[^>]*>\s*([^<]{3,120}?)\s*</g)]
+    .map((m) => strip(m[1]))
+    .filter((n) => !/^\.[a-z0-9]+$/i.test(n));
+  const views = [...html.matchAll(/href="([^"]*htmlConverter\.do[^"]*)"/g)]
+    .map((m) => 'https://www.i-sh.co.kr' + m[1].replace(/&amp;/g, '&'));
+  return views.map((url, i) => ({ name: names[i] || `첨부 ${i + 1}`, url, viewer: true }));
+}
+
 /** 모집공고의 상세 페이지를 열어 접수기간을 채운다 (건수가 적어 부담이 크지 않다) */
 async function fillPeriods(rows, limit) {
   const targets = rows.filter((r) => r.noticeKindHint === '모집').slice(0, limit);
@@ -117,6 +132,7 @@ async function fillPeriods(rows, limit) {
       // 같은 페이지에서 소득·자산 기준도 함께 읽는다 (추가 요청이 들지 않는다)
       const c = extractCriteria(text);
       if (c) r.criteria = { ...c, from: '공고 본문' };
+      r.attachments = shAttachments(html, r.seq);
     } catch { /* 한 건 실패해도 나머지는 계속 */ }
     await new Promise((res) => setTimeout(res, 600));
   }
