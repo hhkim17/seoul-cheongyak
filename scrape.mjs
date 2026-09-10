@@ -105,6 +105,34 @@ export function extractPeriod(text) {
 }
 
 /**
+ * SH 문서뷰어에서 공고문 글자를 읽는다.
+ *
+ * htmlConverter.do 는 302로 doc.html?fn=…&rs=… 로 넘긴다. 뷰어는 그 fn/rs 로
+ * 쪽마다 XML을 받아 그린다. 그 XML에 글자가 들어 있어, 자바스크립트 없이도 읽을 수 있다.
+ * 다만 뷰어가 글자를 낱개로 배치해 사이사이 공백이 끼므로 공백을 모두 지워 붙인다.
+ */
+export async function shNoticeText(seq, fileSeq = 1, { maxPages = 10 } = {}) {
+  const conv = `https://www.i-sh.co.kr/main/com/util/htmlConverter.do?brd_id=GS0401&seq=${seq}&data_tp=A&file_seq=${fileSeq}`;
+  const res = await fetchRetry(conv, { headers: { 'User-Agent': UA }, redirect: 'manual' });
+  const loc = res.headers.get('location');
+  if (!loc) return '';
+  const u = new URL(loc, 'https://www.i-sh.co.kr');
+  const fn = u.searchParams.get('fn');
+  const rs = u.searchParams.get('rs');
+  if (!fn || !rs) return '';
+
+  let out = '';
+  for (let i = 1; i <= maxPages; i++) {
+    let r;
+    try { r = await fetchRetry(`https://www.i-sh.co.kr${rs}${fn}.files/${fn}_${i}.xml`, { headers: { 'User-Agent': UA }, retries: 1 }); }
+    catch { break; }
+    if (!r.ok) break;
+    out += (await r.text()).replace(/<[^>]+>/g, ' ');
+  }
+  return out.replace(/\s+/g, '');   // 낱개로 흩어진 글자를 도로 붙인다
+}
+
+/**
  * SH 첨부. 내려받기 주소는 자바스크립트 뒤에 숨어 있지만, 미리보기용 문서뷰어 주소는 노출된다.
  * 이 뷰어는 PDF와 한글 파일을 모두 웹에서 열어 주므로 그대로 쓴다.
  */
@@ -133,6 +161,23 @@ async function fillPeriods(rows, limit) {
       const c = extractCriteria(text);
       if (c) r.criteria = { ...c, from: '공고 본문' };
       r.attachments = shAttachments(html, r.seq);
+
+      // 본문에 기준이 없으면 첨부 공고문을 문서뷰어로 읽는다
+      if (!r.criteria && r.attachments.length) {
+        try {
+          const doc = await shNoticeText(r.seq, 1);
+          if (doc) {
+            const dc = extractCriteria(doc);
+            if (dc) r.criteria = { ...dc, from: `공고문 ${r.attachments[0].name}` };
+            // 접수기간도 본문에서 못 찾았으면 여기서 한 번 더 본다
+            if (!r.receiptStart) {
+              const dp = extractPeriod(doc);
+              if (dp?.from) { r.receiptStart = dp.from; r.receiptEnd = dp.to; }
+              if (dp?.resultDate && !r.resultDate) r.resultDate = dp.resultDate;
+            }
+          }
+        } catch { /* 뷰어가 없는 첨부도 있다 */ }
+      }
     } catch { /* 한 건 실패해도 나머지는 계속 */ }
     await new Promise((res) => setTimeout(res, 600));
   }

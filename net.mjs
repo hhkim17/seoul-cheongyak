@@ -13,11 +13,11 @@ export function isTransient(err) {
  * 타임아웃과 재시도가 붙은 fetch.
  * 5xx·429는 실패로 보고 다시 시도하고, 4xx는 그대로 돌려준다(인증 오류 등은 재시도해도 소용없다).
  */
-export async function fetchRetry(url, { headers, timeoutMs = 20000, retries = 3 } = {}) {
+export async function fetchRetry(url, { headers, timeoutMs = 20000, retries = 3, redirect } = {}) {
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+      const res = await fetch(url, { headers, redirect, signal: AbortSignal.timeout(timeoutMs) });
       if (res.status >= 500 || res.status === 429) throw new Error(`HTTP ${res.status}`);
       return res;
     } catch (e) {
