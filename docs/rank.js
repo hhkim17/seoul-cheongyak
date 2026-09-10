@@ -26,7 +26,7 @@ export function rankKindOf(l) {
 }
 
 /**
- * p = { accountYears, payments, depositManwon, isGangnam3 }
+ * p = { accountYears, payments, depositManwon }
  * area = 신청하려는 전용면적(㎡). 민영 85㎡ 초과일 때 예치금 기준이 달라진다.
  * 반환 { rank: 1|2|3, label, why, need }
  */
@@ -43,17 +43,23 @@ export function judgeRank(l, p, area) {
     return { rank: 3, label: '3순위', why: '가입기간·납입 횟수가 2순위에 못 미칩니다' };
   }
 
-  // 민영주택 — 서울은 가입 2년(강남·서초·송파 외 지역은 1년인 공고도 있다)
-  const needYears = p.isGangnam3 === false ? 1 : 2;
+  // 민영주택 가입기간 요건은 '그 공고가 규제지역에 있는지'로 갈린다.
+  // 투기과열지구·조정대상지역이면 2년, 그 밖의 수도권은 1년.
+  // 공고 자료에 이 표시가 들어 있으므로 사용자에게 묻지 않는다.
+  const regulated = !!(l.flags?.speculative || l.flags?.regulated);
+  const needYears = regulated ? 2 : 1;
   const needDeposit = depositFor(area);
   const d = p.depositManwon;
   if (d == null) return { rank: null, label: '예치금 필요', why: '민영주택은 예치금으로 순위를 가립니다.' };
   if (years >= needYears && d >= needDeposit) {
-    return { rank: 1, label: '1순위', why: `가입 ${needYears}년 이상 · 예치금 ${needDeposit.toLocaleString('ko-KR')}만원 이상` };
+    return { rank: 1, label: '1순위',
+      why: `${regulated ? '규제지역 ' : ''}가입 ${needYears}년 이상 · 예치금 ${needDeposit.toLocaleString('ko-KR')}만원 이상` };
   }
   return {
     rank: 2, label: '2순위',
-    why: years < needYears ? `가입기간이 ${needYears}년에 못 미칩니다` : `예치금이 ${needDeposit.toLocaleString('ko-KR')}만원에 못 미칩니다`,
+    why: years < needYears
+      ? `${regulated ? '투기과열·조정대상지역이라 ' : ''}가입 ${needYears}년이 필요한데 모자랍니다`
+      : `예치금이 ${needDeposit.toLocaleString('ko-KR')}만원에 못 미칩니다`,
     need: `1순위는 가입 ${needYears}년 · 예치금 ${needDeposit.toLocaleString('ko-KR')}만원`,
   };
 }

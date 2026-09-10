@@ -198,7 +198,7 @@ function statusOf(l) {
 // ── 프로필 ───────────────────────────────────────────────────────────
 const DEFAULT_PROFILE = {
   birthYm: '', marriageDate: '', noHouseSince: '', accountYm: '', family: 0, householdCount: null, newbornCount: 0,
-  payments: null, depositManwon: null, isGangnam3: true,
+  payments: null, depositManwon: null,
   incomeManwon: null, soloIncomeManwon: null, assetManwon: null, soloAssetManwon: null,
   realEstateManwon: null, carManwon: null, dualIncome: false,
   budgetEok: 9, areaMin: 49, areaMax: 99,
@@ -257,7 +257,6 @@ function analyze(l) {
     accountYears: shift(accountYearsOf(profile), 1),
     payments: shift(profile.payments, 12),
     depositManwon: profile.depositManwon,
-    isGangnam3: profile.isGangnam3,
   }, rankArea);
   const reasons = [];
   let score = 0;
@@ -816,7 +815,6 @@ function openProfile() {
   $('#pNewborn').value = profile.newbornCount ?? '';
   $('#pPayments').value = profile.payments ?? '';
   $('#pDeposit').value = profile.depositManwon ?? '';
-  $('#pGangnam3').checked = profile.isGangnam3 !== false;
   $('#pIncome').value = profile.incomeManwon ?? '';
   $('#pSolo').value = profile.soloIncomeManwon ?? '';
   $('#pSoloAsset').value = profile.soloAssetManwon ?? '';
@@ -851,7 +849,6 @@ function formFromModal() {
     newbornCount: $('#pNewborn').value === '' ? 0 : Number($('#pNewborn').value),
     payments: $('#pPayments').value === '' ? null : Number($('#pPayments').value),
     depositManwon: $('#pDeposit').value === '' ? null : Number($('#pDeposit').value),
-    isGangnam3: $('#pGangnam3').checked,
   };
 }
 

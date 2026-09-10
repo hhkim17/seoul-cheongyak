@@ -223,7 +223,8 @@
       <div class="grid3" style="margin-top:10px">
         <label class="field"><span>납입 횟수 <span class="hint">국민주택 순위</span></span><input id="pPayments" type="number" min="0" max="600" step="1" placeholder="예: 36"></label>
         <label class="field"><span>예치금 (만원) <span class="hint">민영주택 순위</span></span><input id="pDeposit" type="number" min="0" step="100" placeholder="예: 1500"></label>
-        <label class="toggle" style="align-self:end;padding-bottom:9px"><input type="checkbox" id="pGangnam3" checked> 강남·서초·송파 <span class="hint">가입 2년</span></label>
+        <p class="fineprint" style="align-self:end;padding-bottom:9px;margin:0">가입기간 요건은 공고의 <b>규제지역 여부</b>로 갈리며,
+          공고 자료에서 자동으로 읽습니다.</p>
       </div>
       <div id="scoreOut" class="score-out"></div>
       <details class="help">
@@ -233,7 +234,8 @@
             1순위는 가입 2년 이상이면서 <b>24회 이상</b>, 2순위는 6개월 이상이면서 6회 이상입니다.</li>
           <li><b>민영주택</b>은 면적별 <b>예치금</b>으로 갈립니다. 서울 기준
             85㎡ 이하 <b>300만원</b>, 102㎡ 이하 600만원, 135㎡ 이하 1,000만원, 그 초과 1,500만원입니다.
-            가입기간은 강남·서초·송파가 2년, 그 밖은 1년인 공고가 있습니다.</li>
+            가입기간은 <b>투기과열지구·조정대상지역이면 2년</b>, 그 밖의 수도권은 1년입니다.
+            이건 내가 사는 곳이 아니라 <b>그 공고가 어디에 있는지</b>로 갈리며, 공고 자료에서 자동으로 읽습니다.</li>
           <li><b>무순위·오피스텔·행복주택</b>은 순위를 따지지 않습니다 — 추첨이거나 계층 심사입니다.</li>
         </ul>
       </details>
