@@ -1,7 +1,7 @@
 // 서울 청약 대시보드 — 프론트엔드
-import * as Sync from './sync.js?v=4e7baa78';
-import * as Std from './standards.js?v=4e7baa78';
-import * as Rank from './rank.js?v=4e7baa78';
+import * as Sync from './sync.js?v=1b96b7d1';
+import * as Std from './standards.js?v=1b96b7d1';
+import * as Rank from './rank.js?v=1b96b7d1';
 
 const $ = (s) => document.querySelector(s);
 // 화면 조각이 하나라도 빠져 있으면(브라우저에 남은 옛 HTML 등) 예외가 나서
@@ -541,6 +541,14 @@ function renderFilters() {
   chipRow($('#fAgency'), agencies, filters.agency, (k) => { toggle(filters.agency, k); renderAll(); });
   const gus = SEOUL_GU.filter((g) => listings.some((l) => l.gu === g)).map((g) => ({ key: g, label: g }));
   chipRow($('#fGu'), gus, filters.gu, (k) => { toggle(filters.gu, k); renderAll(); });
+  // 자치구가 안 적힌 공고(대부분 SH 게시판 글)는 자치구를 고르면 조용히 빠진다.
+  // 몇 건이 빠지는지 알려 주지 않으면 목록이 비어 보이는 이유를 알 수 없다.
+  const note = $('#guNote');
+  if (note) {
+    const noGu = listings.filter((l) => visibleKind(l) && !l.gu).length;
+    note.hidden = !(filters.gu.length && noGu);
+    note.textContent = `자치구가 적히지 않은 공고 ${noGu}건은 이 필터에서 빠집니다.`;
+  }
   $('#fSort').value = filters.sort;
   $('#fBudget').checked = filters.budgetOnly;
   $('#fEligible').checked = filters.eligibleOnly;
