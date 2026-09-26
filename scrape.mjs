@@ -207,6 +207,49 @@ export async function scrapeSh({ pages = 2, withPeriods = true, periodLimit = 20
   return withPeriods ? fillPeriods(rows, periodLimit) : rows;
 }
 
+// ── 서울시 청년안심주택 (민간임대) ──────────────────────────────────
+// SH 게시판에는 공공임대분만 올라오고, 민간임대(리마크빌·해링턴타워 등)는
+// 서울시 청년안심주택 포털에만 뜬다. 목록이 JS로 그려져서 화면이 쓰는 JSON을 그대로 부른다.
+const SOCO_JSON = 'https://soco.seoul.go.kr/youth/pgm/home/yohome/bbsListJson.json';
+const SOCO_LIST = 'https://soco.seoul.go.kr/youth/bbs/BMSR00015/list.do?menuNo=400008';
+const SOCO_VIEW = 'https://soco.seoul.go.kr/youth/bbs/BMSR00015/view.do?menuNo=400008&boardId=';
+
+/** 청년안심주택 모집공고 목록. 민간임대가 대부분이고 공공임대도 섞여 있다. */
+export async function scrapeYouthSafe({ pages = 3 } = {}) {
+  const out = [];
+  for (let page = 1; page <= pages; page++) {
+    const res = await fetchRetry(SOCO_JSON, {
+      method: 'POST',
+      headers: {
+        'User-Agent': UA,
+        Referer: SOCO_LIST,
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      },
+      body: `bbsId=BMSR00015&pageIndex=${page}&menuNo=400008`,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rows = (await res.json()).resultList || [];
+    if (!rows.length) break;
+    for (const r of rows) {
+      const title = strip(String(r.nttSj || ''));
+      if (!title) continue;
+      out.push({
+        seq: String(r.boardId),
+        title,
+        noticeDate: r.optn1 || null,          // 공고일
+        deadline: r.optn4 || null,            // 접수 마감일
+        operator: strip(String(r.optn3 || '')), // 사업주체
+        url: SOCO_VIEW + r.boardId,
+        // "최초모집"이 본공고, "추가모집"은 잔여세대 재모집이다
+        noticeKindHint: /당첨자|발표|서류\s*심사/.test(title) ? '발표' : '모집',
+      });
+    }
+    await new Promise((r) => setTimeout(r, 700)); // 서버 배려
+  }
+  const seen = new Set();
+  return out.filter((r) => (seen.has(r.seq) ? false : seen.add(r.seq)));
+}
+
 // ── HUG 든든전세주택 ────────────────────────────────────────────────
 const HUG_LIST = 'https://www.khug.or.kr/jeonse/web/s07/s070102.jsp';
 

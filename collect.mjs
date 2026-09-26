@@ -6,7 +6,7 @@ import { myhome } from './myhome.mjs';
 import { isTransient } from './net.mjs';
 import { extractCriteria } from './criteria.mjs';
 import { pdfToText, pickNoticePdf } from './pdftext.mjs';
-import { scrapeSh, scrapeHug, scrapeIncomeStandard, scrapeMedianIncome } from './scrape.mjs';
+import { scrapeSh, scrapeHug, scrapeYouthSafe, scrapeIncomeStandard, scrapeMedianIncome } from './scrape.mjs';
 import * as N from './normalize.mjs';
 import { cacheGet, cacheSet } from './store.mjs';
 
@@ -112,7 +112,10 @@ async function scrapeSection() {
     }
   };
   const [sh, hug] = await Promise.all([
-    run('SH 공고게시판', () => scrapeSh({ pages: 6, periodLimit: 20 }), N.normalizeSh),
+    // 6페이지는 3주치밖에 안 돼서, 오래전 올라왔지만 접수는 아직인 공고를 놓쳤다
+    // (예: 8/28 공고한 장기미임대의 접수가 9/28). 두 달치로 늘린다.
+    run('SH 공고게시판', () => scrapeSh({ pages: 20, periodLimit: 20 }), N.normalizeSh),
+    run('청년안심주택', () => scrapeYouthSafe({ pages: 3 }), N.normalizeYouthSafe),
     run('HUG 든든전세', () => scrapeHug(), N.normalizeHug),
   ]);
   return {

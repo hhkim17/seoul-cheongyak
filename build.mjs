@@ -73,8 +73,20 @@ const data = await collectListings(key);
 if (prev?.listings?.length) {
   const before = prev.listings.length;
   const after = data.listings.length;
-  if (after < before * 0.6) {
-    log(`::warning::수집 결과가 ${before}건 → ${after}건으로 급감했습니다. 상류 API 장애로 보고 데이터를 갱신하지 않습니다.`);
+  // 전체 건수만 보면, 한 출처가 통째로 죽어도 다른 출처가 늘어 가려진다.
+  // 실제로 청약홈이 totalCount 0 을 주던 날 아파트·오피스텔·무순위 128건이
+  // 사라졌는데 합계는 80%라 이 가드를 통과했다. 그래서 출처별로도 본다.
+  // source 는 청약홈 항목에 비어 있어 서로 다른 출처가 한 칸에 뭉친다. kind 로 센다.
+  const byKind = (rows) => rows.reduce((m, l) => (m[l.kind] = (m[l.kind] || 0) + 1, m), {});
+  const pb = byKind(prev.listings);
+  const nb = byKind(data.listings);
+  const vanished = Object.entries(pb).filter(([k, n]) => n >= 5 && !nb[k]).map(([k, n]) => `${k}(${n}건→0)`);
+
+  if (after < before * 0.6 || vanished.length) {
+    const why = vanished.length
+      ? `출처가 통째로 비었습니다: ${vanished.join(', ')}`
+      : `수집 결과가 ${before}건 → ${after}건으로 급감했습니다`;
+    log(`::warning::${why}. 상류 API 장애로 보고 데이터를 갱신하지 않습니다.`);
     data.errors.forEach((e) => log(`  ⚠︎ ${e}`));
     copyAssets();   // 화면 코드는 최신으로 두되 데이터는 그대로 둔다
     log('화면 코드만 반영하고 종료합니다.');

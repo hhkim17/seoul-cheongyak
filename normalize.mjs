@@ -256,7 +256,7 @@ export const CORNERS = [
 ];
 
 /** 유형을 글로 판정해야 하는 출처 — 청약홈 분양 공고는 kind만으로 충분하다 */
-const TYPED_KINDS = new Set(['LH_RENT', 'MYHOME_RENT', 'SH', 'LH_WELFARE']);
+const TYPED_KINDS = new Set(['LH_RENT', 'MYHOME_RENT', 'SH', 'LH_WELFARE', 'YOUTHSAFE']);
 
 /** 앞에 있는 규칙이 이긴다 — 좁은 유형부터 본다 */
 const TYPE_RULES = [
@@ -466,6 +466,30 @@ export const myhomeIsSeoul = (r) =>
   /서울/.test(String(r.brtcNm || '')) || String(r.fullAdres || '').startsWith('서울');
 
 // ── SH·HUG 게시판 수집분 정규화 ──────────────────────────────────────
+// 서울시 청년안심주택 포털의 민간임대 공고. SH 게시판에는 공공임대분만 올라와서
+// 이쪽을 따로 읽는다. 목록에 마감일만 있고 시작일은 없어, 시작일은 비워 둔다.
+export function normalizeYouthSafe(r) {
+  const name = r.title.replace(/^\[민간임대\]\s*/, '');
+  return {
+    kind: 'YOUTHSAFE', kindLabel: '청년안심주택', source: 'SOCO',
+    houseManageNo: r.seq, pblancNo: r.seq, id: `SOCO:${r.seq}`,
+    name: r.title,
+    areaName: '서울', address: '',
+    gu: guFromAddress(name),
+    totalUnits: null,
+    noticeDate: toISO(r.noticeDate),
+    receiptStart: null, receiptEnd: toISO(r.deadline),
+    rank1Start: null, rank1End: toISO(r.deadline),
+    resultDate: null, contractStart: null, contractEnd: null, moveIn: '',
+    developer: r.operator || '민간 사업주체', builder: '', tel: '1600-3456',
+    homepage: 'https://soco.seoul.go.kr/youth/main/main.do', noticeUrl: r.url,
+    subType: '청년안심주택', scheduleUnknown: !r.deadline,
+    noticeKind: r.noticeKind || classifyNotice(r.title),
+    criteria: null, attachments: [],
+    models: [], cmpet: null, score: null, flags: {},
+  };
+}
+
 export function normalizeSh(r) {
   return {
     kind: 'SH', kindLabel: r.type, source: 'SH',
