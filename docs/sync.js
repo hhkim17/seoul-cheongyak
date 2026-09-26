@@ -19,9 +19,12 @@ const loadScript = (src) => new Promise((res, rej) => {
 });
 
 let providers = null;   // 켜져 있는 외부 로그인 제공자
+let reachable = null;   // 백엔드에 닿는지 (null=아직 모름, false=응답 없음)
 
 export const user = () => currentUser;
 export const hasProvider = (name) => !providers || providers.includes(name);
+/** Supabase 프로젝트가 살아 있는지. 무료 플랜은 오래 쉬면 자동으로 멈춘다. */
+export const isReachable = () => reachable;
 
 /** 어떤 로그인 방식이 켜져 있는지 미리 확인한다 (안 켜진 버튼으로 보내지 않기 위해) */
 async function loadProviders() {
@@ -29,7 +32,12 @@ async function loadProviders() {
     const res = await fetch(`${SUPABASE.url}/auth/v1/settings`, { headers: { apikey: SUPABASE.key } });
     const d = await res.json();
     providers = Object.entries(d.external || {}).filter(([, on]) => on).map(([k]) => k);
-  } catch { providers = null; }
+    reachable = true;
+  } catch {
+    // 호스트 이름조차 풀리지 않으면(프로젝트 일시정지) 여기로 온다
+    providers = null;
+    reachable = false;
+  }
   return providers;
 }
 export const enabled = () => !!SUPABASE.url && !!SUPABASE.key;
@@ -52,6 +60,7 @@ export async function initAuth(onChange) {
     onChange?.(currentUser);
     return currentUser;
   } catch (e) {
+    if (reachable === null) reachable = false;
     console.warn('로그인 기능을 켜지 못했습니다:', e.message);
     return null;
   }

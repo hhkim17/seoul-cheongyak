@@ -1,7 +1,7 @@
 // 서울 청약 대시보드 — 프론트엔드
-import * as Sync from './sync.js?v=cd9db3fb';
-import * as Std from './standards.js?v=cd9db3fb';
-import * as Rank from './rank.js?v=cd9db3fb';
+import * as Sync from './sync.js?v=623ccfde';
+import * as Std from './standards.js?v=623ccfde';
+import * as Rank from './rank.js?v=623ccfde';
 
 const $ = (s) => document.querySelector(s);
 // 화면 조각이 하나라도 빠져 있으면(브라우저에 남은 옛 HTML 등) 예외가 나서
@@ -50,7 +50,8 @@ const SPECIAL_TYPES = [
 ];
 
 // GitHub Pages 등 정적 호스팅에서는 서버 API가 없으므로 빌드된 스냅샷을 읽는다.
-const STATIC = !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+// 개발 서버 없이 정적 파일만 띄운 경우에도 배포본처럼 돌게, 부팅 때 실제로 확인해 고친다
+let STATIC = !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
 
 // 코너 = 제도별 묶음. 빌드 스냅샷이 주면 그걸 쓰고, 없으면 이 기본값을 쓴다.
 const DEFAULT_CORNERS = [
@@ -1171,14 +1172,34 @@ async function pullAndApply() {
   return `불러왔습니다 — 스크랩 ${scraps.size}건.`;
 }
 
+const DOWN_MSG = '로그인 서버가 멈춰 있습니다. Supabase 프로젝트가 일시정지된 상태라, 대시보드에서 되살려야 합니다.';
+// supabase-js 는 호스트가 죽어도 'Failed to fetch' 만 던진다. 사람이 읽을 말로 바꾼다.
+const authError = (e) => (/failed to fetch|networkerror|load failed/i.test(e.message || '') ? DOWN_MSG : e.message);
+
 function openAuth() {
   renderAuth(Sync.user());
-  // 카카오가 아직 안 켜져 있으면 눌러도 오류 화면으로 가므로 미리 알린다
-  const kakaoOn = Sync.hasProvider('kakao');
+  // 무료 Supabase 프로젝트는 한동안 안 쓰면 자동으로 멈춘다. 그러면 호스트 이름조차
+  // 풀리지 않아 어느 버튼을 눌러도 아무 일도 안 일어난다 — 이유를 먼저 알린다.
+  const down = Sync.isReachable() === false;
+  const kakaoOn = !down && Sync.hasProvider('kakao');
   $('#btnKakao').disabled = !kakaoOn;
   $('#btnKakao').style.opacity = kakaoOn ? '1' : '.45';
-  $('#btnKakao').title = kakaoOn ? '' : '카카오 로그인은 아직 설정 전입니다';
-  $('#authMsg').textContent = ''; $('#authMsg').className = 'msg';
+  $('#btnKakao').title = down ? '로그인 서버가 멈춰 있습니다'
+    : kakaoOn ? '' : '카카오 로그인은 아직 설정 전입니다';
+  $('#btnMagic').disabled = down;
+  $('#btnMagic').style.opacity = down ? '.45' : '1';
+
+  const msg = $('#authMsg');
+  if (down) {
+    msg.className = 'msg warn';
+    msg.innerHTML = '<b>로그인 서버가 멈춰 있습니다.</b><br>'
+      + '무료 Supabase 프로젝트가 장기 미사용으로 일시정지된 상태라 카카오·메일 로그인이 모두 안 됩니다. '
+      + '<a href="https://supabase.com/dashboard/project/qihmovkyudfwvdjraagm" target="_blank" rel="noopener">대시보드</a>'
+      + '에서 되살리면 바로 복구됩니다.<br>'
+      + '<span class="hint">그동안에도 내 조건·스크랩은 이 브라우저에 그대로 저장되니 사이트는 평소처럼 쓰시면 됩니다.</span>';
+  } else {
+    msg.textContent = ''; msg.className = 'msg';
+  }
   $('#syncMsg').textContent = ''; $('#syncMsg').className = 'msg';
   $('#authModal').hidden = false;
 }
@@ -1217,7 +1238,7 @@ $('#btnMagic').onclick = async () => {
     await Sync.signInWithEmail(email);
     msg.className = 'msg ok';
     msg.textContent = `${email} 로 로그인 링크를 보냈습니다. 메일함을 확인하세요.`;
-  } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+  } catch (e) { msg.className = 'msg err'; msg.textContent = authError(e); }
 };
 
 $('#btnKakao').onclick = async () => {
@@ -1227,7 +1248,7 @@ $('#btnKakao').onclick = async () => {
     msg.className = 'msg err';
     msg.textContent = /provider is not enabled/i.test(e.message)
       ? '카카오 로그인이 아직 켜져 있지 않습니다. 아래 이메일 로그인을 쓰거나 설정을 마쳐 주세요.'
-      : e.message;
+      : authError(e);
   }
 };
 
@@ -1322,7 +1343,14 @@ document.addEventListener('keydown', (e) => {
     showApp(); renderMeCard(); load(false);
     return;
   }
-  const h = await (await fetch('/api/health')).json();
-  if (!h.hasKey) { showSetup(); return; }
+  // 개발 서버가 없으면(정적 파일만 띄운 경우) 여기서 조용히 멈춰 버렸다.
+  // 그럴 땐 배포본과 똑같이 스냅샷을 읽어 동작하게 둔다.
+  try {
+    const h = await (await fetch('/api/health')).json();
+    if (!h.hasKey) { showSetup(); return; }
+  } catch {
+    STATIC = true;                    // 개발 서버가 없다 — 스냅샷으로 돈다
+    $('#btnRefresh').hidden = true;
+  }
   showApp(); renderMeCard(); load(false);
 })();

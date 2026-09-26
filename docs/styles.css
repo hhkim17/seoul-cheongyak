@@ -60,6 +60,9 @@ code { background: var(--bg-3); padding: 1px 5px; border-radius: 4px; font-size:
 .msg { min-height: 20px; font-size: 13px; margin: 10px 0; }
 .msg.err { color: var(--hot); }
 .msg.ok { color: var(--good); }
+.msg.warn { padding: 11px 13px; background: var(--bg-3); border-left: 3px solid var(--hot); border-radius: 8px; line-height: 1.55; color: var(--text-2); }
+.msg.warn b { color: var(--text-1); }
+.msg.warn a { color: var(--accent); }
 
 /* ── 상단바 ────────────────────────────────── */
 .topbar {
