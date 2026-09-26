@@ -47,18 +47,47 @@ function parseKoreanDate(raw, fallbackYear) {
 // SH 공고 본문은 '■ 접수일 ○ 인터넷 접수 : 2026. 9. 9.( 수 ) 10:00 ~ 9. 11.( 금 ) 17:00'
 // 처럼 항목 기호·요일·시각이 섞이고, 뒤쪽 날짜는 연도를 생략한다.
 // 일정 구간을 통째로 잘라 그 안의 날짜를 모두 모으고, 최소~최대를 접수기간으로 본다.
-const SCHEDULE_KEY = /(청약\s?신청\s?일정|청약\s?일정|접수\s?일정|신청\s?일정|접수\s?기간|신청\s?기간|모집\s?기간|접수\s?일시|신청\s?일시|모집\s?신청일|접수일)/g;
+const SCHEDULE_KEY = /(청약\s?신청\s?일정|청약\s?일정|접수\s?일정|신청\s?일정|접수\s?기간|신청\s?기간|모집\s?기간|접수\s?일시|신청\s?일시|모집\s?신청일|신청\s?접수|청약\s?접수|인터넷\s?청약|접수일)/g;
 const RESULT_KEY = /당첨자\s?발표/;
 // 연도는 생략될 수 있다. 시각(10:00)과 섞이지 않도록 끝에 '.' 또는 '일'을 요구한다.
-const ANY_DATE = /(?:(20\d{2})\s*[.\-년]\s*)?(\d{1,2})\s*[.\-월]\s*(\d{1,2})\s*[.일]/g;
+// SH 공고문은 ‘26.9.9.(수) 처럼 작은따옴표 + 두 자리 연도를 쓴다
+const ANY_DATE = /(?:(20\d{2}|['‘’ʼ]\s*\d{2})\s*[.\-년]\s*)?(\d{1,2})\s*[.\-월]\s*(\d{1,2})\s*[.일]/g;
 const SECTION_END = /[■□▣]/;
+
+/**
+ * 구간 안에서 '~'로 묶인 첫 날짜 쌍을 찾는다.
+ * SH 일정표는 «신청접수 9.28~9.30  10.23  서류심사대상자발표» 처럼 라벨보다 날짜가
+ * 먼저 와서, 구간 전체의 최소~최대를 쓰면 다음 단계 날짜까지 빨려 들어간다.
+ */
+function firstRange(text, defaultYear) {
+  const re = new RegExp(ANY_DATE.source, 'g');
+  const hits = [];
+  let year = defaultYear, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m[1]) {
+      const y = m[1].replace(/[^\d]/g, '');
+      year = y.length === 2 ? String(2000 + Number(y)) : y;
+    }
+    const mo = Number(m[2]), day = Number(m[3]);
+    if (!year || mo < 1 || mo > 12 || day < 1 || day > 31) continue;
+    hits.push({ iso: `${year}-${pad(mo)}-${pad(day)}`, start: m.index, end: m.index + m[0].length });
+  }
+  for (let i = 0; i < hits.length - 1; i++) {
+    const gap = text.slice(hits[i].end, hits[i + 1].start);
+    if (gap.includes('~') && hits[i].iso !== hits[i + 1].iso) return [hits[i].iso, hits[i + 1].iso];
+  }
+  return null;
+}
 
 /** 구간 안의 날짜를 ISO로 모은다. 연도가 없으면 앞서 나온 연도를 잇는다. */
 function datesIn(text, defaultYear) {
   const out = [];
   let year = defaultYear;
   for (const m of text.matchAll(ANY_DATE)) {
-    if (m[1]) year = m[1];
+    if (m[1]) {
+      const y = m[1].replace(/[^\d]/g, '');
+      year = y.length === 2 ? String(2000 + Number(y)) : y;
+    }
     const mo = Number(m[2]);
     const day = Number(m[3]);
     if (!year || mo < 1 || mo > 12 || day < 1 || day > 31) continue;
@@ -68,10 +97,21 @@ function datesIn(text, defaultYear) {
 }
 
 /** 키워드 다음부터 다음 항목 기호(■)까지를 한 구간으로 본다 */
+const STAGE_END = /(서류\s?심사|당첨자\s?발표|계약\s?체결|서류\s?제출|입주\s?지정|동호\s?추첨|예비\s?입주)/;
+
 function sectionAfter(text, index, max = 420) {
   const raw = text.slice(index, index + max);
   const stop = raw.slice(20).search(SECTION_END);   // 키워드 바로 뒤의 기호는 건너뛴다
-  return stop >= 0 ? raw.slice(0, stop + 20) : raw;
+  let seg = stop >= 0 ? raw.slice(0, stop + 20) : raw;
+  // 접수 다음 단계(서류심사·당첨자발표…) 날짜까지 끌어와 기간이 몇 달로 벌어지곤 했다.
+  // 그 라벨 앞에서 끊되, 끊어서 날짜가 하나도 안 남으면 원래대로 둔다.
+  const st = seg.slice(4).search(STAGE_END);
+  if (st >= 0) {
+    const cut = seg.slice(0, st + 4);
+    if (ANY_DATE.test(cut)) { ANY_DATE.lastIndex = 0; seg = cut; }
+    ANY_DATE.lastIndex = 0;
+  }
+  return seg;
 }
 
 /**
@@ -84,10 +124,22 @@ export function extractPeriod(text) {
 
   const candidates = [];
   for (const m of text.matchAll(SCHEDULE_KEY)) {
-    const dates = datesIn(sectionAfter(text, m.index), yearHint);
+    const seg = sectionAfter(text, m.index);
+    const range = firstRange(seg, yearHint);      // «9.28~9.30» 같은 명시적 범위가 최우선
+    if (range) { candidates.push(range); continue; }
+    const dates = datesIn(seg, yearHint);
     if (dates.length) candidates.push(dates);
   }
-  const best = candidates.find((d) => new Set(d).size >= 2) || candidates[0];
+  // 게시판 본문은 표가 아니라 산문이라 '신청기간 종료 이후…' 같은 문장에 걸려
+  // 엉뚱한 날짜를 줍곤 했다(접수 2025-12-15~2026-08-28 같은 결과). 그래서
+  // 서로 다른 날짜 둘 이상 + 상식적인 길이(120일 이내)인 구간만 접수기간으로 본다.
+  // 여기서 못 찾으면 호출부가 첨부 공고문을 다시 읽는다.
+  const spanOk = (d) => {
+    const a = new Date(d.reduce((x, y) => (x < y ? x : y)));
+    const b = new Date(d.reduce((x, y) => (x > y ? x : y)));
+    return (b - a) / 86400000 <= 120;
+  };
+  const best = candidates.find((d) => new Set(d).size >= 2 && spanOk(d)) || null;
 
   let resultDate = null;
   const r = text.search(RESULT_KEY);
