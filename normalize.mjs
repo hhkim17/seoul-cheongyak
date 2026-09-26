@@ -29,7 +29,12 @@ export function guFromAddress(addr) {
   // 단순 포함 검색만 하면 엉뚱한 구가 잡힌다.
   const m = a.match(/서울(?:특별시)?\s*([가-힣]{2,4}구)/);
   if (m && SEOUL_GU.includes(m[1])) return m[1];
-  return SEOUL_GU.find((g) => a.includes(g)) || null;
+  const exact = SEOUL_GU.find((g) => a.includes(g));
+  if (exact) return exact;
+  // 청년안심주택은 «대흥역 리마크빌 마포»처럼 '구'를 뗀 지명을 쓴다.
+  // 두 글자 이상 어간만 본다 ('중구'의 '중'은 아무 데나 걸린다).
+  const stem = SEOUL_GU.filter((g) => g.length >= 3 && a.includes(g.slice(0, -1)));
+  return stem.length === 1 ? stem[0] : null;   // 둘 이상 걸리면 단정하지 않는다
 }
 
 /** '084.9871A' / '59.9800B' → 84.99 (전용면적) */
