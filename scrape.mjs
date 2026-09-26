@@ -47,7 +47,7 @@ function parseKoreanDate(raw, fallbackYear) {
 // SH 공고 본문은 '■ 접수일 ○ 인터넷 접수 : 2026. 9. 9.( 수 ) 10:00 ~ 9. 11.( 금 ) 17:00'
 // 처럼 항목 기호·요일·시각이 섞이고, 뒤쪽 날짜는 연도를 생략한다.
 // 일정 구간을 통째로 잘라 그 안의 날짜를 모두 모으고, 최소~최대를 접수기간으로 본다.
-const SCHEDULE_KEY = /(청약\s?신청\s?일정|청약\s?일정|접수\s?일정|신청\s?일정|접수\s?기간|신청\s?기간|모집\s?기간|접수\s?일시|신청\s?일시|모집\s?신청일|신청\s?접수|청약\s?접수|인터넷\s?청약|접수일)/g;
+const SCHEDULE_KEY = /(청약\s?신청\s?일정|청약\s?일정|접수\s?일정|신청\s?일정|접수\s?기간|신청\s?기간|모집\s?기간|접수\s?일시|신청\s?일시|모집\s?신청일|신청\s?접수|청약\s?접수|서류\s?접수|인터넷\s?청약|모집\s?일정|공급\s?일정|접수일)/g;
 const RESULT_KEY = /당첨자\s?발표/;
 // 연도는 생략될 수 있다. 시각(10:00)과 섞이지 않도록 끝에 '.' 또는 '일'을 요구한다.
 // SH 공고문은 ‘26.9.9.(수) 처럼 작은따옴표 + 두 자리 연도를 쓴다
@@ -55,26 +55,36 @@ const ANY_DATE = /(?:(20\d{2}|['‘’ʼ]\s*\d{2})\s*[.\-년]\s*)?(\d{1,2})\s*[.
 const SECTION_END = /[■□▣]/;
 
 /**
- * 구간 안에서 '~'로 묶인 첫 날짜 쌍을 찾는다.
- * SH 일정표는 «신청접수 9.28~9.30  10.23  서류심사대상자발표» 처럼 라벨보다 날짜가
- * 먼저 와서, 구간 전체의 최소~최대를 쓰면 다음 단계 날짜까지 빨려 들어간다.
+ * 구간 안에서 '~'로 묶인 첫 날짜 범위를 읽는다.
+ *
+ * SH 공고문은 표기가 제각각이라 날짜 규칙 하나로는 안 잡힌다.
+ *   ‘26.9.9.(수)~‘26.9.11.(금)          작은따옴표 두 자리 연도
+ *   2026.9.28.(월)10:00~2026.9.30.(수)   사이에 시각이 낀 경우
+ *   2026.08.20.~2026.08.26              끝 마침표가 없는 경우
+ *   26.09.1026.09.10~26.09.12           공백이 지워져 앞 날짜와 붙어 버린 경우
+ * 그래서 '~'를 먼저 찾고, 그 앞뒤 좁은 창에서 날짜를 하나씩 집어 온다.
  */
-function firstRange(text, defaultYear) {
-  const re = new RegExp(ANY_DATE.source, 'g');
-  const hits = [];
-  let year = defaultYear, m;
+const LOOSE_DATE = /(?:(20\d{2}|[2-3]\d)\s*[.\-]\s*)?(\d{1,2})\s*[.\-]\s*(\d{1,2})/g;
+
+function pickDate(text, last, defaultYear) {
+  const re = new RegExp(LOOSE_DATE.source, 'g');
+  let m, got = null;
   while ((m = re.exec(text)) !== null) {
-    if (m[1]) {
-      const y = m[1].replace(/[^\d]/g, '');
-      year = y.length === 2 ? String(2000 + Number(y)) : y;
-    }
+    let year = m[1] ? (m[1].length === 2 ? `20${m[1]}` : m[1]) : defaultYear;
     const mo = Number(m[2]), day = Number(m[3]);
-    if (!year || mo < 1 || mo > 12 || day < 1 || day > 31) continue;
-    hits.push({ iso: `${year}-${pad(mo)}-${pad(day)}`, start: m.index, end: m.index + m[0].length });
+    if (!year || Number(year) < 2020 || Number(year) > 2039) continue;
+    if (mo < 1 || mo > 12 || day < 1 || day > 31) continue;
+    got = `${year}-${pad(mo)}-${pad(day)}`;
+    if (!last) break;
   }
-  for (let i = 0; i < hits.length - 1; i++) {
-    const gap = text.slice(hits[i].end, hits[i + 1].start);
-    if (gap.includes('~') && hits[i].iso !== hits[i + 1].iso) return [hits[i].iso, hits[i + 1].iso];
+  return got;
+}
+
+function firstRange(text, defaultYear) {
+  for (let i = text.indexOf('~'); i >= 0; i = text.indexOf('~', i + 1)) {
+    const a = pickDate(text.slice(Math.max(0, i - 26), i), true, defaultYear);   // 앞쪽은 가장 가까운 것
+    const b = pickDate(text.slice(i + 1, i + 27), false, defaultYear);           // 뒤쪽은 첫 번째
+    if (a && b && a <= b) return [a, b];
   }
   return null;
 }
@@ -125,19 +135,19 @@ export function extractPeriod(text) {
   const candidates = [];
   for (const m of text.matchAll(SCHEDULE_KEY)) {
     const seg = sectionAfter(text, m.index);
-    const range = firstRange(seg, yearHint);      // «9.28~9.30» 같은 명시적 범위가 최우선
+    const range = firstRange(seg, yearHint);   // '~'로 묶인 명시적 범위가 최우선
     if (range) { candidates.push(range); continue; }
     const dates = datesIn(seg, yearHint);
     if (dates.length) candidates.push(dates);
   }
   // 게시판 본문은 표가 아니라 산문이라 '신청기간 종료 이후…' 같은 문장에 걸려
   // 엉뚱한 날짜를 줍곤 했다(접수 2025-12-15~2026-08-28 같은 결과). 그래서
-  // 서로 다른 날짜 둘 이상 + 상식적인 길이(120일 이내)인 구간만 접수기간으로 본다.
+  // 서로 다른 날짜 둘 이상 + 상식적인 길이(두 달 이내)인 구간만 접수기간으로 본다.
   // 여기서 못 찾으면 호출부가 첨부 공고문을 다시 읽는다.
   const spanOk = (d) => {
     const a = new Date(d.reduce((x, y) => (x < y ? x : y)));
     const b = new Date(d.reduce((x, y) => (x > y ? x : y)));
-    return (b - a) / 86400000 <= 120;
+    return (b - a) / 86400000 <= 60;   // 청약 접수기간이 두 달을 넘는 일은 사실상 없다
   };
   const best = candidates.find((d) => new Set(d).size >= 2 && spanOk(d)) || null;
 
