@@ -43,6 +43,23 @@ jobs:
             exit 1
           fi
 
+      # 무료 Supabase 프로젝트는 7일 놀면 자동으로 멈춘다. 멈추면 호스트 이름조차
+      # 풀리지 않아 카카오·메일 로그인이 통째로 죽는다. 어차피 몇 시간마다 도는
+      # 작업이니, 여기서 DB를 한 번 건드려 깨워 둔다.
+      # (여기 키는 브라우저에도 그대로 실리는 공개용 publishable 키다)
+      - name: Supabase 깨우기
+        continue-on-error: true
+        run: |
+          U="https://qihmovkyudfwvdjraagm.supabase.co"
+          K="sb_publishable_lk5IKQZP2wCvmTohkwAMww_2qw82Tzf"
+          code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' \
+            "$U/rest/v1/profiles?select=id&limit=1" -H "apikey: $K")
+          if [ "$code" = "000" ]; then
+            echo "::warning::Supabase 에 닿지 못했습니다 (프로젝트가 멈췄을 수 있습니다). 로그인 기능만 영향을 받습니다."
+          else
+            echo "Supabase 응답 $code — 깨어 있습니다."
+          fi
+
       - name: 의존성 설치
         run: npm install --no-audit --no-fund --silent
 
