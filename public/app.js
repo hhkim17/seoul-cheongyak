@@ -1062,9 +1062,21 @@ async function load(refresh = false) {
   meta = data;
   cutlineCache = null;
 
+  // 예약 실행은 30분마다 걸어 두었지만 GitHub이 밀어서 실제로는 두세 시간에 한 번씩
+  // 돈다. 그래서 주기를 약속하는 대신 자료가 실제로 몇 시간 전 것인지를 적는다.
   const t = new Date(data.builtAt || data.fetchedAt);
-  const auto = STATIC ? ' · 30분마다 자동 재빌드' : (data.autoRefreshMinutes ? ` · ${data.autoRefreshMinutes}분마다 자동 갱신` : '');
-  $('#status').textContent = `서울 공고 ${listings.length}건 · ${t.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })} 기준${auto}`;
+  const ageMin = Math.max(0, Math.round((Date.now() - t.getTime()) / 60000));
+  const ago = ageMin < 1 ? '방금'
+    : ageMin < 60 ? `${ageMin}분 전`
+    : ageMin < 1440 ? `${Math.floor(ageMin / 60)}시간 전`
+    : `${Math.floor(ageMin / 1440)}일 전`;
+  const stale = ageMin > 720 ? ' · 갱신이 밀리고 있습니다' : '';
+  const auto = STATIC ? '' : (data.autoRefreshMinutes ? ` · ${data.autoRefreshMinutes}분마다 자동 갱신` : '');
+  const when = t.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
+  $('#status').textContent = `서울 공고 ${listings.length}건 · ${ago} 갱신${stale}${auto}`;
+  $('#status').title = STATIC
+    ? `${when} 기준\n예약 실행은 30분 간격으로 걸어 두었지만, GitHub 사정으로 실제로는 보통 2~5시간에 한 번 돕니다.`
+    : `${when} 기준`;
 
   renderSources(data.sources);
 

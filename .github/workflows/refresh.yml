@@ -2,7 +2,7 @@ name: 청약 데이터 갱신
 
 on:
   schedule:
-    - cron: '*/30 * * * *'   # 30분마다 (GitHub 사정에 따라 다소 지연될 수 있음)
+    - cron: '*/30 * * * *'   # 30분마다 요청하지만 GitHub이 큐를 밀어 실제로는 2~5시간에 한 번 돈다
   workflow_dispatch:          # 손으로 즉시 실행
     inputs:
       test_email:
