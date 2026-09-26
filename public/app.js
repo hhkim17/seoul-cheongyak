@@ -1176,10 +1176,9 @@ const DOWN_MSG = '로그인 서버가 멈춰 있습니다. Supabase 프로젝트
 // supabase-js 는 호스트가 죽어도 'Failed to fetch' 만 던진다. 사람이 읽을 말로 바꾼다.
 const authError = (e) => (/failed to fetch|networkerror|load failed/i.test(e.message || '') ? DOWN_MSG : e.message);
 
-function openAuth() {
-  renderAuth(Sync.user());
-  // 무료 Supabase 프로젝트는 한동안 안 쓰면 자동으로 멈춘다. 그러면 호스트 이름조차
-  // 풀리지 않아 어느 버튼을 눌러도 아무 일도 안 일어난다 — 이유를 먼저 알린다.
+// 무료 Supabase 프로젝트는 한동안 안 쓰면 자동으로 멈춘다. 그러면 호스트 이름조차
+// 풀리지 않아 어느 버튼을 눌러도 아무 일도 안 일어난다 — 이유를 먼저 알린다.
+function applyAuthAvailability() {
   const down = Sync.isReachable() === false;
   const kakaoOn = !down && Sync.hasProvider('kakao');
   $('#btnKakao').disabled = !kakaoOn;
@@ -1200,8 +1199,15 @@ function openAuth() {
   } else {
     msg.textContent = ''; msg.className = 'msg';
   }
+}
+
+function openAuth() {
+  renderAuth(Sync.user());
+  applyAuthAvailability();
   $('#syncMsg').textContent = ''; $('#syncMsg').className = 'msg';
   $('#authModal').hidden = false;
+  // 확인이 아직 안 끝났으면, 끝나는 대로 다시 칠한다
+  Sync.whenProbed?.().then(applyAuthAvailability).catch(() => {});
 }
 
 // ── 이벤트 ───────────────────────────────────────────────────────────

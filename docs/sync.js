@@ -42,6 +42,12 @@ async function loadProviders() {
 }
 export const enabled = () => !!SUPABASE.url && !!SUPABASE.key;
 
+// 확인은 supabase-js(CDN) 없이도 되는 일이라, 모듈을 읽는 즉시 시작한다.
+// initAuth 안에서 하면 CDN 로딩을 기다리느라 로그인 창이 먼저 열려 버렸다.
+const probe = loadProviders();
+/** 백엔드 확인이 끝나기를 기다린다 */
+export const whenProbed = () => probe;
+
 /** 로그인 상태가 바뀔 때마다 onChange(user)를 부른다 */
 export async function initAuth(onChange) {
   if (!enabled()) return null;
@@ -50,7 +56,7 @@ export async function initAuth(onChange) {
     client = window.supabase.createClient(SUPABASE.url, SUPABASE.key, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     });
-    await loadProviders();
+    await probe;
     const { data } = await client.auth.getSession();
     currentUser = data.session?.user ?? null;
     client.auth.onAuthStateChange((_e, session) => {

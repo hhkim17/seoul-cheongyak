@@ -1,7 +1,7 @@
 // 서울 청약 대시보드 — 프론트엔드
-import * as Sync from './sync.js?v=623ccfde';
-import * as Std from './standards.js?v=623ccfde';
-import * as Rank from './rank.js?v=623ccfde';
+import * as Sync from './sync.js?v=35f93be7';
+import * as Std from './standards.js?v=35f93be7';
+import * as Rank from './rank.js?v=35f93be7';
 
 const $ = (s) => document.querySelector(s);
 // 화면 조각이 하나라도 빠져 있으면(브라우저에 남은 옛 HTML 등) 예외가 나서
@@ -1176,10 +1176,9 @@ const DOWN_MSG = '로그인 서버가 멈춰 있습니다. Supabase 프로젝트
 // supabase-js 는 호스트가 죽어도 'Failed to fetch' 만 던진다. 사람이 읽을 말로 바꾼다.
 const authError = (e) => (/failed to fetch|networkerror|load failed/i.test(e.message || '') ? DOWN_MSG : e.message);
 
-function openAuth() {
-  renderAuth(Sync.user());
-  // 무료 Supabase 프로젝트는 한동안 안 쓰면 자동으로 멈춘다. 그러면 호스트 이름조차
-  // 풀리지 않아 어느 버튼을 눌러도 아무 일도 안 일어난다 — 이유를 먼저 알린다.
+// 무료 Supabase 프로젝트는 한동안 안 쓰면 자동으로 멈춘다. 그러면 호스트 이름조차
+// 풀리지 않아 어느 버튼을 눌러도 아무 일도 안 일어난다 — 이유를 먼저 알린다.
+function applyAuthAvailability() {
   const down = Sync.isReachable() === false;
   const kakaoOn = !down && Sync.hasProvider('kakao');
   $('#btnKakao').disabled = !kakaoOn;
@@ -1200,8 +1199,15 @@ function openAuth() {
   } else {
     msg.textContent = ''; msg.className = 'msg';
   }
+}
+
+function openAuth() {
+  renderAuth(Sync.user());
+  applyAuthAvailability();
   $('#syncMsg').textContent = ''; $('#syncMsg').className = 'msg';
   $('#authModal').hidden = false;
+  // 확인이 아직 안 끝났으면, 끝나는 대로 다시 칠한다
+  Sync.whenProbed?.().then(applyAuthAvailability).catch(() => {});
 }
 
 // ── 이벤트 ───────────────────────────────────────────────────────────
