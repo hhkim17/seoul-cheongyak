@@ -61,6 +61,7 @@ if (!key) {
 // 직전 스냅샷 — 상류 API 장애로 텅 빈 결과가 나왔을 때 덮어쓰지 않기 위한 기준
 const prevPath = path.join(OUT, 'data', 'listings.json');
 let prev = null;
+let carried = [];   // 상류가 죽은 출처를 직전 스냅샷에서 그대로 가져온 것
 try { prev = JSON.parse(fs.readFileSync(prevPath, 'utf8')); } catch { /* 첫 빌드 */ }
 
 const data = await collectListings(key);
@@ -82,15 +83,22 @@ if (prev?.listings?.length) {
   const nb = byKind(data.listings);
   const vanished = Object.entries(pb).filter(([k, n]) => n >= 5 && !nb[k]).map(([k, n]) => `${k}(${n}건→0)`);
 
-  if (after < before * 0.6 || vanished.length) {
-    const why = vanished.length
-      ? `출처가 통째로 비었습니다: ${vanished.join(', ')}`
-      : `수집 결과가 ${before}건 → ${after}건으로 급감했습니다`;
-    log(`::warning::${why}. 상류 API 장애로 보고 데이터를 갱신하지 않습니다.`);
+  // 전부 무너졌으면 손대지 않는 게 안전하다
+  if (after < before * 0.6 && !vanished.length) {
+    log(`::warning::수집 결과가 ${before}건 → ${after}건으로 급감했습니다. 상류 API 장애로 보고 데이터를 갱신하지 않습니다.`);
     data.errors.forEach((e) => log(`  ⚠︎ ${e}`));
     copyAssets();   // 화면 코드는 최신으로 두되 데이터는 그대로 둔다
     log('화면 코드만 반영하고 종료합니다.');
     process.exit(0);
+  }
+
+  // 일부 출처만 죽었으면 통째로 버리지 않는다. 죽은 출처는 직전 값을 그대로 쓰고
+  // 나머지는 새로 받은 값을 쓴다. 그래야 멀쩡한 출처의 새 공고가 같이 막히지 않는다.
+  if (vanished.length) {
+    const deadKinds = new Set(Object.keys(pb).filter((k) => pb[k] >= 5 && !nb[k]));
+    carried = prev.listings.filter((l) => deadKinds.has(l.kind));
+    log(`::warning::출처가 통째로 비었습니다: ${vanished.join(', ')}. 해당 ${carried.length}건은 직전 값을 그대로 씁니다.`);
+    data.errors.forEach((e) => log(`  ⚠︎ ${e}`));
   }
 }
 
@@ -104,6 +112,14 @@ await enrichMany(key, data.listings, (done, total) => {
 await readCriteriaMany(data.listings, (done, total) => {
   if (done % 5 === 0 || done === total) log(`  공고문 ${done}/${total}`);
 });
+
+// 상류가 죽어 새로 못 받은 출처를 직전 값으로 채운다 (이미 보강된 것들이라 그대로 둔다)
+if (carried.length) {
+  const have = new Set(data.listings.map((l) => l.id));
+  const add = carried.filter((l) => !have.has(l.id));
+  data.listings.push(...add);
+  log(`직전 스냅샷에서 ${add.length}건을 이어 붙였습니다.`);
+}
 
 // 접수 마감된 공고는 경쟁률이 나오므로 한 번 더 확인해 둔다
 const closed = data.listings.filter((l) => isClosed(l) && !l.cmpet).length;
