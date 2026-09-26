@@ -1,7 +1,7 @@
 // 서울 청약 대시보드 — 프론트엔드
-import * as Sync from './sync.js?v=f1ec2da6';
-import * as Std from './standards.js?v=f1ec2da6';
-import * as Rank from './rank.js?v=f1ec2da6';
+import * as Sync from './sync.js?v=4e7baa78';
+import * as Std from './standards.js?v=4e7baa78';
+import * as Rank from './rank.js?v=4e7baa78';
 
 const $ = (s) => document.querySelector(s);
 // 화면 조각이 하나라도 빠져 있으면(브라우저에 남은 옛 HTML 등) 예외가 나서
@@ -216,6 +216,12 @@ function statusOf(l) {
   if (l.resultDate && l.resultDate >= TODAY) return { key: 'result', label: '당첨자 발표 대기', until: l.resultDate, d: dayDiff(l.resultDate) };
   // 게시판에서 긁어온 공고는 접수 일정이 목록에 없다. 마감으로 단정하지 않는다.
   if (!w.length && l.scheduleUnknown) return { key: 'notice', label: '접수 일정은 공고문 확인', until: l.noticeDate, d: null };
+  // 마감일만 아는 공고 — 청년안심주택 포털은 목록에 시작일을 싣지 않는다.
+  // windows()는 시작일이 있어야 구간을 만들기 때문에, 이 경우 아직 마감 전인데도
+  // 곧장 '접수 마감'으로 떨어지고 있었다.
+  if (!w.length && !l.receiptStart && l.receiptEnd && l.receiptEnd >= TODAY) {
+    return { key: 'live', label: '접수중 · 시작일은 공고문 확인', until: l.receiptEnd, d: dayDiff(l.receiptEnd) };
+  }
   return { key: 'done', label: '접수 마감', until: w.at(-1)?.to || l.receiptEnd, d: null };
 }
 
