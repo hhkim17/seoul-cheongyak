@@ -98,11 +98,28 @@ jobs:
             exit 0
           fi
           git commit -m "청약 데이터 갱신 ($(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST'))"
-          # 로컬 autosync가 같은 브랜치에 밀 수 있어 몇 번 다시 시도한다
+
+          # 로컬 autosync나 다른 실행이 같은 브랜치에 밀 수 있어 몇 번 다시 시도한다.
+          # docs/ 는 전부 이 빌드가 만들어 낸 산출물이라, 충돌하면 고민할 것 없이
+          # 방금 만든 쪽이 옳다. 예전에는 rebase 가 충돌난 채로 멈춰서 그다음
+          # 재시도가 전부 "unmerged files" 로 죽었다.
+          mkdir -p /tmp/built && cp -R docs/. /tmp/built/
           for i in 1 2 3; do
-            git pull --rebase --autostash origin main && git push && exit 0
-            echo "푸시 충돌 — 재시도 $i"
-            sleep 5
+            if git pull --rebase --autostash origin main && git push; then
+              exit 0
+            fi
+            echo "푸시 충돌 — 방금 만든 docs 로 맞추고 재시도 $i"
+            git rebase --abort 2>/dev/null || true
+            git reset --hard origin/main 2>/dev/null || true
+            git fetch origin main && git reset --hard origin/main
+            rm -rf docs && mkdir -p docs && cp -R /tmp/built/. docs/
+            git add docs
+            if git diff --cached --quiet; then
+              echo "이미 최신입니다."
+              exit 0
+            fi
+            git commit -m "청약 데이터 갱신 ($(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST'))"
+            sleep 3
           done
           echo "::warning::데이터는 빌드했지만 푸시하지 못했습니다. 다음 실행에서 반영됩니다."
           exit 0
