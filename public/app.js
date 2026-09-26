@@ -238,9 +238,34 @@ const saveProfile = () => localStorage.setItem('cheongyak.profile', JSON.stringi
 // 스크랩(관심 공고) — 브라우저에 저장한다
 let scraps = new Set(JSON.parse(localStorage.getItem('cheongyak.scraps') || '[]'));
 const saveScraps = () => localStorage.setItem('cheongyak.scraps', JSON.stringify([...scraps]));
+/** 별 하나를 현재 상태대로 칠한다. 빈 별과 찬 별은 글자부터 다르게 둔다. */
+function paintStar(btn, on) {
+  btn.textContent = on ? '★' : '☆';
+  btn.classList.toggle('on', on);
+  btn.title = on ? '스크랩 해제' : '스크랩';
+  btn.setAttribute('aria-pressed', String(on));
+  if (on) { btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); }
+}
+
 function toggleScrap(id) {
-  scraps.has(id) ? scraps.delete(id) : scraps.add(id);
-  saveScraps(); schedulePush(); renderAll();
+  const on = !scraps.has(id);
+  on ? scraps.add(id) : scraps.delete(id);
+  saveScraps(); schedulePush();
+
+  // 스크랩 탭에서는 목록 자체가 달라져야 하니 다시 그린다
+  if (filters.corner === 'scrap') { renderAll(); return; }
+
+  // 그 밖에는 누른 별만 바꾼다 — 목록을 통째로 다시 그리면 눌린 티가 안 난다
+  for (const b of document.querySelectorAll('[data-scrap]')) {
+    if (b.dataset.scrap === id) paintStar(b, on);
+  }
+  const tab = [...document.querySelectorAll('#corners .corner-tab')]
+    .find((b) => b.textContent.includes('스크랩'));
+  if (tab) {
+    const n = tab.querySelector('.n');
+    if (n) n.textContent = String(scraps.size);
+    tab.classList.toggle('empty', scraps.size === 0);
+  }
 }
 
 // 메일 알림 조건 — 로컬 서버가 watch.json에 써 주고, 없으면 화면에서 복사
@@ -657,7 +682,7 @@ function cardOf(l, a) {
       </div>
       <div class="right">
         <div class="match ${tier}"><b>${a.score}</b><span>맞춤도</span></div>
-        <button class="star${scraps.has(l.id) ? ' on' : ''}" title="스크랩" data-scrap="${esc(l.id)}">★</button>
+        <button class="star${scraps.has(l.id) ? ' on' : ''}" title="${scraps.has(l.id) ? '스크랩 해제' : '스크랩'}" aria-pressed="${scraps.has(l.id)}" data-scrap="${esc(l.id)}">${scraps.has(l.id) ? '★' : '☆'}</button>
       </div>
     </div>
     <div class="badges">
@@ -786,7 +811,7 @@ function drawerHTML(l, a) {
   return `
   <button class="close-x" data-close>✕</button>
   <h2>${esc(l.name)}
-    <button class="star${scraps.has(l.id) ? ' on' : ''}" title="스크랩" data-scrap="${esc(l.id)}">★</button>
+    <button class="star${scraps.has(l.id) ? ' on' : ''}" title="${scraps.has(l.id) ? '스크랩 해제' : '스크랩'}" aria-pressed="${scraps.has(l.id)}" data-scrap="${esc(l.id)}">${scraps.has(l.id) ? '★' : '☆'}</button>
   </h2>
   <p class="lead small">${esc(l.address || '')}</p>
   <div class="badges" style="margin-top:10px">
@@ -1385,7 +1410,7 @@ document.addEventListener('click', (e) => {
   const dl = e.target.closest('[data-dl]');
   if (dl) { e.preventDefault(); e.stopPropagation(); window.open(dl.dataset.dl, '_blank', 'noopener'); return; }
   const scrapBtn = e.target.closest('#drawerPanel [data-scrap]');
-  if (scrapBtn) { toggleScrap(scrapBtn.dataset.scrap); scrapBtn.classList.toggle('on'); return; }
+  if (scrapBtn) { toggleScrap(scrapBtn.dataset.scrap); paintStar(scrapBtn, scraps.has(scrapBtn.dataset.scrap)); return; }
   // 닫기 버튼 안의 아이콘을 눌러도 닫히도록 closest로 찾는다
   if (e.target.closest('[data-close]')) closeOverlays();
 });

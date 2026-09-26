@@ -245,12 +245,29 @@ details.help p { margin: 6px 0 0; font-size: 12px; color: var(--text-3); }
 .source.off { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
 
 /* 스크랩 */
+/* 빈 별(☆)과 찬 별(★)은 글자도 색도 다르게 둔다.
+   예전엔 같은 ★에 grayscale·opacity 만 달리해서, 글리프가 원래 단색이라
+   눌러도 거의 티가 나지 않았다. */
 .star {
-  background: none; border: none; font-size: 17px; line-height: 1; padding: 2px 4px;
-  filter: grayscale(1); opacity: .35; transition: opacity .12s, filter .12s;
+  background: none; border: none; cursor: pointer;
+  font-size: 19px; line-height: 1; padding: 2px 5px; border-radius: 6px;
+  color: var(--text-3);
+  transition: color .12s, transform .12s, background .12s;
 }
-.star:hover { opacity: .8; }
-.star.on { filter: none; opacity: 1; }
+.star:hover { color: var(--text-2); background: var(--bg-3); transform: scale(1.12); }
+.star:active { transform: scale(.92); }
+.star.on { color: #f6b73c; text-shadow: 0 0 10px rgba(246, 183, 60, .45); }
+.star.on:hover { color: #ffc85a; }
+.star:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 담는 순간 한 번 튕겨 준다 */
+@keyframes starPop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.45) rotate(-8deg); }
+  100% { transform: scale(1); }
+}
+.star.pop { animation: starPop .32s ease-out; }
+@media (prefers-reduced-motion: reduce) { .star.pop { animation: none; } }
 .card-head .right { display: flex; align-items: flex-start; gap: 6px; }
 
 /* 검색 */
