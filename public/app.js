@@ -212,8 +212,11 @@ const DEFAULT_PROFILE = {
   budgetEok: 9, areaMin: 49, areaMax: 99,
   special: [], gu: [], seoulResident: true,
   incomeKind: 'work',   // work=근로 · biz=사업(프리랜서) · both
+  ownedBefore: false,   // 집을 소유한 적이 있는지 — 무주택 기산일이 달라진다
 };
 let profile = { ...DEFAULT_PROFILE, ...JSON.parse(localStorage.getItem('cheongyak.profile') || '{}') };
+// 예전에 '무주택이 된 날'만 넣어 둔 사람은 집을 소유했던 것으로 본다
+if (profile.ownedBefore === undefined) profile.ownedBefore = !!profile.noHouseSince;
 const saveProfile = () => localStorage.setItem('cheongyak.profile', JSON.stringify(profile));
 
 // 스크랩(관심 공고) — 브라우저에 저장한다
@@ -884,6 +887,7 @@ function openProfile() {
   try {
     renderProfileChips();
     renderIncomeSrc();
+    renderOwnedBefore();
     updateScoreOut();
     updateIncomeOut();
   } catch (e) {
@@ -1178,6 +1182,31 @@ const authError = (e) => (/failed to fetch|networkerror|load failed/i.test(e.mes
 
 // 무료 Supabase 프로젝트는 한동안 안 쓰면 자동으로 멈춘다. 그러면 호스트 이름조차
 // 풀리지 않아 어느 버튼을 눌러도 아무 일도 안 일어난다 — 이유를 먼저 알린다.
+// 집을 소유한 적 없는 사람에게 빈 날짜칸만 내밀면 뭘 넣으란 건지 알 수 없다.
+// 소유 이력부터 묻고, 필요할 때만 날짜를 받는다. 기산일은 생년월·혼인일로 계산된다.
+function renderOwnedBefore() {
+  const row = $('#pOwnedBefore'), wrap = $('#pNoHouseWrap'), note = $('#pOwnedNote');
+  if (!row) return;
+  const owned = !!profile.ownedBefore;
+  for (const b of row.querySelectorAll('.chip')) b.classList.toggle('on', (b.dataset.owned === 'yes') === owned);
+  if (wrap) wrap.hidden = !owned;
+
+  if (!note) return;
+  const p = formFromModal();
+  const start = noHouseStart(p);
+  if (!p.birthYm) { note.textContent = '생년월을 넣으면 무주택 기간이 자동으로 계산됩니다.'; return; }
+  if (!owned) {
+    note.innerHTML = start > new Date()
+      ? `넣을 것이 없습니다. 무주택 기간은 <b>만 30세(${start.getFullYear()}.${String(start.getMonth() + 1).padStart(2, '0')})</b>부터 쌓이기 시작합니다.`
+        + ' 그 전에 혼인신고를 하면 그날부터 쌓입니다.'
+      : `넣을 것이 없습니다. 생년월${p.marriageDate ? '·혼인신고일' : ''}로 기산일(<b>${localISO(start)}</b>)이 정해집니다.`;
+  } else {
+    note.textContent = p.noHouseSince
+      ? '판 날과 만 30세(혼인 시 혼인신고일) 중 늦은 쪽부터 무주택 기간을 셉니다.'
+      : '집을 판 날을 넣어 주세요. 그날부터 무주택 기간을 다시 셉니다.';
+  }
+}
+
 function applyAuthAvailability() {
   const down = Sync.isReachable() === false;
   const kakaoOn = !down && Sync.hasProvider('kakao');
@@ -1226,6 +1255,15 @@ $('#keyInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#k
 
 $('#btnRefresh').onclick = () => load(true);   // 목록만 다시 받기 (빠름)
 if ($('#btnProfile')) $('#btnProfile').onclick = openProfile;
+
+if ($('#pOwnedBefore')) $('#pOwnedBefore').onclick = (e) => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  profile.ownedBefore = b.dataset.owned === 'yes';
+  if (!profile.ownedBefore) setVal('#pNoHouseSince', '');   // 소유한 적 없으면 날짜는 지운다
+  renderOwnedBefore();
+  updateScoreOut();
+};
 
 if ($('#pIncomeKind')) $('#pIncomeKind').onclick = (e) => {
   const b = e.target.closest('.chip');
@@ -1291,6 +1329,7 @@ $('#fReset').onclick = () => {
 
 for (const id of ['pBirth', 'pMarriage', 'pNoHouseSince', 'pAccountYm', 'pFamily']) {
   on('#' + id, 'input', updateScoreOut);
+  on('#' + id, 'input', renderOwnedBefore);
 }
 for (const id of ['pIncome', 'pSolo', 'pFamily', 'pHousehold', 'pBirth', 'pDual']) {
   on('#' + id, 'input', updateIncomeOut);
@@ -1312,6 +1351,7 @@ $('#pSave').onclick = () => {
     areaMax: +valOf('#pAreaMax') || 999,
     seoulResident: chkOf('#pSeoulResident'),
     incomeKind: profile.incomeKind,
+    ownedBefore: !!profile.ownedBefore,
   };
   cutlineCache = null;   // 거주지 기준이 바뀌면 커트라인도 다시 잡는다
   saveProfile();

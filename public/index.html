@@ -218,7 +218,18 @@
       </div>
       <div class="grid3" style="margin-top:10px">
         <label class="field"><span>혼인신고일 <span class="hint">(선택)</span></span><input id="pMarriage" type="date"></label>
-        <label class="field" style="grid-column: span 2"><span>무주택이 된 날 <span class="hint">(집을 팔아 무주택이 된 적이 있을 때만)</span></span><input id="pNoHouseSince" type="date"></label>
+        <div class="field" style="grid-column: span 2">
+          <span>집을 소유한 적이 있나요? <span class="hint">무주택 기간 기산에 쓰입니다</span></span>
+          <div class="chips" id="pOwnedBefore" style="margin-top:6px">
+            <button type="button" class="chip" data-owned="no">없음</button>
+            <button type="button" class="chip" data-owned="yes">있음 · 지금은 무주택</button>
+          </div>
+          <label id="pNoHouseWrap" hidden style="display:block;margin-top:8px">
+            <span class="hint">그 집을 판 날 (무주택이 된 날)</span>
+            <input id="pNoHouseSince" type="date" style="margin-top:4px">
+          </label>
+          <p id="pOwnedNote" class="fineprint" style="margin-top:6px"></p>
+        </div>
       </div>
       <div class="grid3" style="margin-top:10px">
         <label class="field"><span>납입 횟수 <span class="hint">국민주택 순위</span></span><input id="pPayments" type="number" min="0" max="600" step="1" placeholder="예: 36"></label>
