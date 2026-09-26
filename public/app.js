@@ -155,6 +155,18 @@ export function noHouseStart(p) {
   return start;
 }
 
+/**
+ * 무주택 기간을 세기 시작했는지. 만 30세 미만 미혼이면 아직 시작되지 않았고,
+ * 이때 가점은 '1년 미만 2점'이 아니라 0점이다 (주택공급규칙 별표1).
+ */
+export function noHouseStarted(p, addYears = 0) {
+  const start = noHouseStart(p);
+  if (!start) return false;
+  const at = new Date();
+  at.setFullYear(at.getFullYear() + addYears);
+  return start <= at;
+}
+
 /** 아직 만 30세가 안 됐으면 무주택 기간은 0 */
 export function noHouseYearsOf(p) {
   const start = noHouseStart(p);
@@ -169,7 +181,11 @@ export function accountYearsOf(p) {
 }
 
 // ── 청약 가점 계산 (주택공급규칙 별표1) ───────────────────────────────
-function noHouseScore(y) { if (!y || y < 1) return 2; return Math.min(32, 2 + Math.floor(y) * 2); }
+function noHouseScore(y, started = true) {
+  if (!started) return 0;            // 만 30세 미만 미혼 — 기간이 아직 시작되지 않았다
+  if (!y || y < 1) return 2;
+  return Math.min(32, 2 + Math.floor(y) * 2);
+}
 function accountScore(y) {
   if (!y || y < 0.5) return 1;
   if (y < 1) return 2;
@@ -177,7 +193,7 @@ function accountScore(y) {
 }
 function familyScore(n) { return Math.min(35, 5 + (Number(n) || 0) * 5); }
 function totalScore(p) {
-  return noHouseScore(shift(noHouseYearsOf(p), 1)) + accountScore(shift(accountYearsOf(p), 1)) + familyScore(p.family);
+  return noHouseScore(shift(noHouseYearsOf(p), 1), noHouseStarted(p, futureYears)) + accountScore(shift(accountYearsOf(p), 1)) + familyScore(p.family);
 }
 
 // ── 상태 판정 ────────────────────────────────────────────────────────
@@ -401,7 +417,7 @@ function renderMeCard() {
   $('#meCard').innerHTML = `
     <div class="big">${s}<span style="font-size:13px;color:var(--text-3)"> / 84점</span></div>
     <div class="sub">내 청약 가점${profile.birthYm ? '' : ' · 조건 미입력'}</div>
-    <div class="row"><span>무주택 ${yr(nh)}</span><b>${noHouseScore(nh)}점</b></div>
+    <div class="row"><span>무주택 ${noHouseStarted(profile) ? yr(nh) : '기산 전'}</span><b>${noHouseScore(nh, noHouseStarted(profile))}점</b></div>
     <div class="row"><span>통장 ${yr(ac)}</span><b>${accountScore(ac)}점</b></div>
     <div class="row"><span>부양가족 ${profile.family}명</span><b>${familyScore(profile.family)}점</b></div>
     <div class="row" style="margin-top:8px;border-top:1px solid var(--line-soft);padding-top:8px">
@@ -958,7 +974,7 @@ function updateScoreOut() {
       ? `만 30세(${start.getFullYear()}.${String(start.getMonth() + 1).padStart(2, '0')})가 되면 무주택 기간이 쌓이기 시작합니다.`
       : `무주택 기산일 ${localISO(start)} · ${yr(nh)}${p.accountYm ? ` / 통장 ${yr(ac)}` : ''}`;
   $('#scoreOut').innerHTML =
-    `총 <b>${totalScore(p)}점</b> &nbsp;·&nbsp; 무주택 ${noHouseScore(nh)} + 통장 ${accountScore(ac)} + 부양가족 ${familyScore(p.family)}
+    `총 <b>${totalScore(p)}점</b> &nbsp;·&nbsp; 무주택 ${noHouseScore(nh, noHouseStarted(p))} + 통장 ${accountScore(ac)} + 부양가족 ${familyScore(p.family)}
      <span class="sub">${esc(note)}</span>`;
 }
 
