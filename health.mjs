@@ -133,10 +133,20 @@ export function inspect(listings) {
         && (new Date(l.receiptEnd) - new Date(l.receiptStart)) / DAY > 60) bad.과도한접수기간++;
   }
 
-  for (const [k, n] of Object.entries(bad)) {
-    if (n) issues.push({ level: 'warn', text: `${k} ${n}건` });
+  // 몇 건 어긋난 것과 정규화가 통째로 깨진 것은 다르다. 이름이나 링크가 절반쯤
+  // 비었다면 그건 개별 공고 문제가 아니라 코드가 망가진 것이라, 내보내면 안 된다.
+  const n = listings.length || 1;
+  const fatal = n >= 30 && (bad.빈이름 / n > 0.2 || bad.빈링크 / n > 0.2 || bad.중복 / n > 0.2);
+
+  for (const [k, cnt] of Object.entries(bad)) {
+    if (!cnt) continue;
+    const share = cnt / n;
+    issues.push({
+      level: fatal && share > 0.2 ? 'error' : 'warn',
+      text: `${k} ${cnt}건${share > 0.05 ? ` (${(share * 100).toFixed(0)}%)` : ''}`,
+    });
   }
-  return issues;
+  return { issues, fatal };
 }
 
 /** 출처 상태를 실제 수집 결과로 다시 매긴다 (예전에는 청약홈을 아예 검사하지 않았다) */

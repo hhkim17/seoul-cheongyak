@@ -102,8 +102,14 @@ if (carried.length) {
 }
 
 // 낼 준비가 된 목록을 마지막으로 훑는다 — 여기서 걸리면 우리 코드 탓이다
-const flaws = inspect(data.listings);
-for (const f of flaws) log(`::warning::데이터 점검 — ${f.text}`);
+const { issues: flaws, fatal } = inspect(data.listings);
+for (const f of flaws) log(`::${f.level === 'error' ? 'error' : 'warning'}::데이터 점검 — ${f.text}`);
+if (fatal) {
+  // 이름이나 링크가 대량으로 비었다 — 개별 공고가 아니라 정규화가 깨진 것이다
+  log('::error::정상적인 공고 형태가 아닙니다. 데이터를 갱신하지 않고 직전 것을 지킵니다.');
+  copyAssets();
+  process.exit(0);
+}
 
 // 접수 마감된 공고는 경쟁률이 나오므로 한 번 더 확인해 둔다
 const closed = data.listings.filter((l) => isClosed(l) && !l.cmpet).length;
