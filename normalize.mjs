@@ -510,7 +510,8 @@ export function normalizeSh(r) {
     resultDate: r.resultDate || null, contractStart: null, contractEnd: null, moveIn: '',
     developer: 'SH 서울주택도시공사', builder: '', tel: '1600-3456',
     homepage: 'https://www.i-sh.co.kr/', noticeUrl: r.url,
-    subType: r.dept, scheduleUnknown: !r.receiptStart,
+    subType: r.dept, scheduleUnknown: !r.receiptStart && !r.alwaysOpen,
+    alwaysOpen: !!r.alwaysOpen,   // 기간이 정해지지 않은 상시·수시 모집
     noticeKind: r.noticeKind || classifyNotice(r.title),   // 모집 / 발표 / 안내
     criteria: r.criteria || null,   // 공고문에서 직접 읽은 소득·자산 기준
     attachments: r.attachments || [],

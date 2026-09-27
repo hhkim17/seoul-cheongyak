@@ -102,7 +102,20 @@ export function assess(prev, next) {
     if (b - a > 0.2) add('warn', `자치구 인식률이 ${(b * 100).toFixed(0)}% → ${(a * 100).toFixed(0)}% 로 떨어졌습니다`);
   }
 
+  // ── 5. 접수기간을 못 읽은 모집공고 ────────────────────────────────
+  // 서식이 제각각이라 새 공고에서 또 깨진다. 사람이 하나씩 발견해 알려 주는
+  // 대신, 빌드가 스스로 세어 알린다. 출처별로 묶어야 어디가 깨졌는지 보인다.
+  const missing = after.filter((l) => l.noticeKind === '모집' && !l.receiptStart && !l.receiptEnd && !l.alwaysOpen);
+  if (missing.length) {
+    const bySrc = countBy(missing, (l) => KIND_SOURCE[l.kind] || l.kind);
+    const openCount = after.filter((l) => l.noticeKind === '모집').length;
+    const share = pct(missing.length, openCount);
+    add(share > 0.3 ? 'warn' : 'info',
+      `접수기간을 못 읽은 모집공고 ${missing.length}건 (${Object.entries(bySrc).map(([k, v]) => `${k} ${v}`).join(', ')})`);
+  }
+
   return {
+    missing,
     decision: carryKinds.length ? 'carry' : 'publish',
     carryKinds,
     issues,

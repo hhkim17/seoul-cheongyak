@@ -129,6 +129,12 @@ function sectionAfter(text, index, max = 420) {
  * 날짜가 둘 이상 있는 구간(시작~종료가 분명한 곳)을 우선한다.
  * 첨부 공고문(PDF)에만 일정이 있는 공고도 있어, 못 찾으면 null을 준다 — 지어내지 않는다.
  */
+/** 기간이 정해지지 않은 상시·수시 모집인지. 없는 날짜를 지어내는 대신 이렇게 표시한다. */
+export function isAlwaysOpen(text) {
+  const t = String(text || '').replace(/\s+/g, '');
+  return /(상시|수시)모집/.test(t) || /모집공고일~상시/.test(t) || /(신청|접수)기간[^가-힣]{0,6}상시/.test(t);
+}
+
 export function extractPeriod(text) {
   const yearHint = (text.match(/모집\s?공고일\s*:?\s*(20\d{2})/) || text.match(/(20\d{2})/) || [])[1];
 
@@ -219,6 +225,7 @@ async function fillPeriods(rows, limit) {
       const period = extractPeriod(text);
       if (period?.from) { r.receiptStart = period.from; r.receiptEnd = period.to; }
       if (period?.resultDate) r.resultDate = period.resultDate;
+      if (!period?.from && isAlwaysOpen(text)) r.alwaysOpen = true;
       // 같은 페이지에서 소득·자산 기준도 함께 읽는다 (추가 요청이 들지 않는다)
       const c = extractCriteria(text);
       if (c) r.criteria = { ...c, from: '공고 본문' };

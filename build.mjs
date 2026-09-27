@@ -69,7 +69,11 @@ const data = await collectListings(key);
 
 // 상류가 흔들려도 사이트가 거짓말하지 않게 — 판단은 health.mjs 가 한다
 const verdict = assess(prev, data);
-for (const i of verdict.issues) log(`::${i.level === 'error' ? 'error' : 'warning'}::${i.text}`);
+for (const i of verdict.issues) {
+  log(i.level === 'info' ? `  ${i.text}` : `::${i.level === 'error' ? 'error' : 'warning'}::${i.text}`);
+}
+// 어떤 공고가 못 읽혔는지 남겨 둬야 다음에 고칠 수 있다
+for (const m of (verdict.missing || []).slice(0, 15)) log(`    · ${m.name?.slice(0, 60)} (${m.noticeUrl})`);
 
 if (verdict.decision === 'hold') {
   data.errors.forEach((e) => log(`  ⚠︎ ${e}`));
