@@ -64,7 +64,8 @@ const SECTION_END = /[■□▣]/;
  *   26.09.1026.09.10~26.09.12           공백이 지워져 앞 날짜와 붙어 버린 경우
  * 그래서 '~'를 먼저 찾고, 그 앞뒤 좁은 창에서 날짜를 하나씩 집어 온다.
  */
-const LOOSE_DATE = /(?:(20\d{2}|[2-3]\d)\s*[.\-]\s*)?(\d{1,2})\s*[.\-]\s*(\d{1,2})/g;
+// 2026년 8월 11일(화) 처럼 «년·월»을 쓰는 공고가 있다. 점만 받다가 통째로 놓쳤다.
+const LOOSE_DATE = /(?:(20\d{2}|[2-3]\d)\s*[.\-년]\s*)?(\d{1,2})\s*[.\-월]\s*(\d{1,2})/g;
 
 function pickDate(text, last, defaultYear) {
   const re = new RegExp(LOOSE_DATE.source, 'g');
@@ -132,7 +133,23 @@ function sectionAfter(text, index, max = 420) {
 /** 기간이 정해지지 않은 상시·수시 모집인지. 없는 날짜를 지어내는 대신 이렇게 표시한다. */
 export function isAlwaysOpen(text) {
   const t = String(text || '').replace(/\s+/g, '');
-  return /(상시|수시)모집/.test(t) || /모집공고일~상시/.test(t) || /(신청|접수)기간[^가-힣]{0,6}상시/.test(t);
+  return /(상시|수시)\s?(모집|접수)/.test(t)
+    || /모집공고일[^가-힣]{0,4}(이후)?상시/.test(t)
+    || /(신청|접수)기간[^~]{0,14}상시/.test(t);
+}
+
+/**
+ * «본 게시글은 26. 10. 09.일까지 게시될 예정입니다» — 사회주택 상시모집 공고는
+ * 접수기간 대신 게시 종료일만 적는다. 그날이 사실상 마감이라 그대로 쓴다.
+ */
+export function postingUntil(text) {
+  const t = String(text || '').replace(/\s+/g, '');
+  const m = t.match(/게시글은['‘’ʼ]?(20\d{2}|\d{2})\.(\d{1,2})\.(\d{1,2})\.?일?까지게시/);
+  if (!m) return null;
+  const y = m[1].length === 2 ? 2000 + Number(m[1]) : Number(m[1]);
+  const mo = Number(m[2]), d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return `${y}-${pad(mo)}-${pad(d)}`;
 }
 
 export function extractPeriod(text) {
@@ -225,7 +242,14 @@ async function fillPeriods(rows, limit) {
       const period = extractPeriod(text);
       if (period?.from) { r.receiptStart = period.from; r.receiptEnd = period.to; }
       if (period?.resultDate) r.resultDate = period.resultDate;
-      if (!period?.from && isAlwaysOpen(text)) r.alwaysOpen = true;
+      if (!period?.from) {
+        // 접수기간이 따로 없는 공고 — 게시 종료일이 있으면 그게 사실상 마감이다
+        const until = postingUntil(text);
+        if (until) { r.alwaysOpen = true; r.receiptStart = r.date || null; r.receiptEnd = until; }
+        else if (isAlwaysOpen(text)) r.alwaysOpen = true;
+      }
+      // 구체적인 회차 일정이 적혀 있으면 그것을 따른다. «상시 접수»라고 덧붙어
+      // 있어도 차수가 계속 새로 올라오므로, 끝난 회차까지 열린 것으로 두면 안 된다.
       // 같은 페이지에서 소득·자산 기준도 함께 읽는다 (추가 요청이 들지 않는다)
       const c = extractCriteria(text);
       if (c) r.criteria = { ...c, from: '공고 본문' };

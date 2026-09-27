@@ -1,7 +1,7 @@
 // 서울 청약 대시보드 — 프론트엔드
-import * as Sync from './sync.js?v=397f6cb3';
-import * as Std from './standards.js?v=397f6cb3';
-import * as Rank from './rank.js?v=397f6cb3';
+import * as Sync from './sync.js?v=b2af2065';
+import * as Std from './standards.js?v=b2af2065';
+import * as Rank from './rank.js?v=b2af2065';
 
 const $ = (s) => document.querySelector(s);
 // 화면 조각이 하나라도 빠져 있으면(브라우저에 남은 옛 HTML 등) 예외가 나서
@@ -214,7 +214,7 @@ function statusOf(l) {
   const next = w.find((x) => x.from > TODAY);
   if (next) return { key: 'soon', label: `${next.label} 예정`, until: next.from, d: dayDiff(next.from) };
   if (l.resultDate && l.resultDate >= TODAY) return { key: 'result', label: '당첨자 발표 대기', until: l.resultDate, d: dayDiff(l.resultDate) };
-  // 상시·수시 모집은 마감일이 없다. 일정 미상과 섞으면 안 된다.
+  // 기간이 아예 없는 상시·수시 모집만 여기 온다. 회차 일정이 있으면 위에서 갈린다.
   if (!w.length && l.alwaysOpen) return { key: 'live', label: '상시 모집 · 선착순 마감', until: null, d: null };
   // 게시판에서 긁어온 공고는 접수 일정이 목록에 없다. 마감으로 단정하지 않는다.
   if (!w.length && l.scheduleUnknown) return { key: 'notice', label: '접수 일정은 공고문 확인', until: l.noticeDate, d: null };
