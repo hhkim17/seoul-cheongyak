@@ -828,6 +828,7 @@ function drawerHTML(l, a) {
   <button class="close-x" data-close>✕</button>
   <h2>${esc(l.name)}
     <button class="star${scraps.has(l.id) ? ' on' : ''}" title="${scraps.has(l.id) ? '스크랩 해제' : '스크랩'}" aria-pressed="${scraps.has(l.id)}" data-scrap="${esc(l.id)}">${scraps.has(l.id) ? '★' : '☆'}</button>
+    <button class="share" title="이 공고 링크 복사" data-share="${esc(l.id)}">🔗</button>
   </h2>
   <p class="lead small">${esc(l.address || '')}</p>
   <div class="badges" style="margin-top:10px">
@@ -1426,6 +1427,34 @@ function closeOverlays() {
   }
 }
 
+/** 공고 하나를 가리키는 주소 */
+const linkTo = (id) => `${location.origin}${location.pathname}#n=${encodeURIComponent(id)}`;
+
+/**
+ * 링크를 클립보드에 넣는다. navigator.clipboard 는 보안 컨텍스트에서만 되고
+ * 권한이 막혀 있기도 해서, 실패하면 숨긴 입력칸을 거쳐 복사한다.
+ */
+async function copyLink(id, btn) {
+  const url = linkTo(id);
+  let ok = false;
+  try { await navigator.clipboard.writeText(url); ok = true; } catch { /* 아래로 */ }
+  if (!ok) {
+    const t = document.createElement('textarea');
+    t.value = url; t.setAttribute('readonly', '');
+    t.style.cssText = 'position:fixed;top:-100px;opacity:0';
+    document.body.appendChild(t); t.select();
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    t.remove();
+  }
+  if (btn) {
+    btn.classList.add('done');
+    btn.textContent = ok ? '✓' : '⚠';
+    btn.title = ok ? '링크를 복사했습니다' : '복사하지 못했습니다 — 주소창을 복사해 주세요';
+    setTimeout(() => { btn.classList.remove('done'); btn.textContent = '🔗'; btn.title = '이 공고 링크 복사'; }, 1600);
+  }
+  if (!ok) prompt('아래 주소를 복사하세요', url);   // 마지막 수단
+}
+
 /** 주소에 #n=<공고id> 가 있으면 그 공고를 연다 */
 function openFromHash() {
   const m = /^#n=(.+)$/.exec(location.hash);
@@ -1443,6 +1472,8 @@ window.addEventListener('hashchange', openFromHash);
 document.addEventListener('click', (e) => {
   const dl = e.target.closest('[data-dl]');
   if (dl) { e.preventDefault(); e.stopPropagation(); window.open(dl.dataset.dl, '_blank', 'noopener'); return; }
+  const shareBtn = e.target.closest('[data-share]');
+  if (shareBtn) { e.preventDefault(); e.stopPropagation(); copyLink(shareBtn.dataset.share, shareBtn); return; }
   const scrapBtn = e.target.closest('#drawerPanel [data-scrap]');
   if (scrapBtn) { toggleScrap(scrapBtn.dataset.scrap); paintStar(scrapBtn, scraps.has(scrapBtn.dataset.scrap)); return; }
   // 닫기 버튼 안의 아이콘을 눌러도 닫히도록 closest로 찾는다
