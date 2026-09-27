@@ -111,7 +111,7 @@ async function scrapeSection() {
       return { rows: [], error: `${label} 수집 실패(게시판 구조가 바뀌었을 수 있습니다): ${e.message}` };
     }
   };
-  const [sh, hug] = await Promise.all([
+  const [sh, soco, hug] = await Promise.all([
     // 6페이지는 3주치밖에 안 돼서, 오래전 올라왔지만 접수는 아직인 공고를 놓쳤다
     // (예: 8/28 공고한 장기미임대의 접수가 9/28). 두 달치로 늘린다.
     run('SH 공고게시판', () => scrapeSh({ pages: 20, periodLimit: 60 }), N.normalizeSh),
@@ -119,9 +119,9 @@ async function scrapeSection() {
     run('HUG 든든전세', () => scrapeHug(), N.normalizeHug),
   ]);
   return {
-    rows: [...sh.rows, ...hug.rows],
-    error: [sh.error, hug.error].filter(Boolean).join(' | ') || null,
-    ok: { sh: !sh.error, hug: !hug.error },
+    rows: [...sh.rows, ...soco.rows, ...hug.rows],
+    error: [sh.error, soco.error, hug.error].filter(Boolean).join(' | ') || null,
+    ok: { sh: !sh.error, soco: !soco.error, hug: !hug.error },
   };
 }
 
@@ -201,16 +201,16 @@ export const DATA_SOURCES = [
   { id: 'applyhome-detail', org: '한국부동산원', name: '청약홈 분양정보 조회 서비스',
     use: '아파트·무순위·오피스텔·공공지원임대 공고와 주택형·분양가',
     url: 'https://www.data.go.kr/data/15098547/openapi.do', required: true },
-  { id: 'applyhome-cmpet', org: '한국부동산원', name: '청약홈 청약접수 경쟁률 및 특별공급 신청현황 조회 서비스',
+  { id: 'applyhome-cmpet', role: 'support', org: '한국부동산원', name: '청약홈 청약접수 경쟁률 및 특별공급 신청현황 조회 서비스',
     use: '경쟁률·당첨가점·특별공급 신청현황',
     url: 'https://www.data.go.kr/data/15098905/openapi.do', required: true },
   { id: 'lh-notice', org: '한국토지주택공사', name: 'LH 분양임대공고문 조회 서비스',
     use: '행복주택·국민임대·영구임대·매입/전세임대 등 LH 공고 목록',
     url: 'https://www.data.go.kr/data/15058530/openapi.do' },
-  { id: 'lh-supply', org: '한국토지주택공사', name: 'LH 분양임대공고별 공급정보 조회 서비스',
+  { id: 'lh-supply', role: 'support', org: '한국토지주택공사', name: 'LH 분양임대공고별 공급정보 조회 서비스',
     use: 'LH 공고의 주택형·세대수·임대조건',
     url: 'https://www.data.go.kr/data/15056765/openapi.do' },
-  { id: 'lh-detail', org: '한국토지주택공사', name: 'LH 분양임대공고별 상세정보 조회 서비스',
+  { id: 'lh-detail', role: 'support', org: '한국토지주택공사', name: 'LH 분양임대공고별 상세정보 조회 서비스',
     use: 'LH 공고문 첨부파일(PDF/HWP)',
     url: 'https://www.data.go.kr/data/15057999/openapi.do' },
   { id: 'myhome', org: '국토교통부', name: '마이홈포털 공공주택 모집공고 조회 서비스',
@@ -219,6 +219,9 @@ export const DATA_SOURCES = [
   { id: 'sh-board', org: 'SH 서울주택도시공사', name: 'SH 공고 게시판 (직접 수집)', scraped: true,
     use: '장기전세·청년안심주택·매입임대·미리내집 등 SH 공고. Open API가 없어 공개 게시판을 읽습니다.',
     url: 'https://www.i-sh.co.kr/main/lay2/program/S1T1637C1639/www/brd/m_247/list.do' },
+  { id: 'soco', org: '서울특별시', name: '청년안심주택 모집공고 (직접 수집)', scraped: true,
+    use: '민간임대 청년안심주택. SH 게시판에는 공공임대분만 올라와 포털을 따로 읽습니다.',
+    url: 'https://soco.seoul.go.kr/youth/bbs/BMSR00015/list.do?menuNo=400008' },
   { id: 'hug-board', org: 'HUG 주택도시보증공사', name: 'HUG 든든전세 모집공고 (직접 수집)', scraped: true,
     use: '든든전세주택 모집 물량. Open API가 없어 공개 페이지를 읽습니다.',
     url: 'https://www.khug.or.kr/jeonse/web/s07/s070102.jsp' },
@@ -230,6 +233,7 @@ export function sourceStatus({ lhBlocked, myhomeBlocked, scrapeOk = {} }) {
     let ok = true;
     if (s.id === 'sh-board') ok = scrapeOk.sh !== false;
     if (s.id === 'hug-board') ok = scrapeOk.hug !== false;
+    if (s.id === 'soco') ok = scrapeOk.soco !== false;
     if (s.id === 'applyhome-cmpet') ok = !state.cmpetBlocked;
     if (s.id.startsWith('lh-')) ok = !lhBlocked;
     if (s.id === 'myhome') ok = !myhomeBlocked;

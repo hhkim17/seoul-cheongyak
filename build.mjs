@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { getServiceKey } from './store.mjs';
 import { collectListings, enrichMany, readCriteriaMany, isClosed, sourceStatus, log, state } from './collect.mjs';
 import { CORNERS } from './normalize.mjs';
+import { assess, inspect, markSources } from './health.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
@@ -66,40 +67,19 @@ try { prev = JSON.parse(fs.readFileSync(prevPath, 'utf8')); } catch { /* 첫 빌
 
 const data = await collectListings(key);
 
-/**
- * 청약홈·LH 같은 상류 API는 가끔 오류가 아니라 '0건'을 돌려준다.
- * 그대로 배포하면 사이트가 비고, 다음 정상 빌드 때 전부 '새 공고'로 잡혀
- * 알림이 폭주한다. 직전보다 크게 줄면 배포하지 않고 이전 데이터를 지킨다.
- */
-if (prev?.listings?.length) {
-  const before = prev.listings.length;
-  const after = data.listings.length;
-  // 전체 건수만 보면, 한 출처가 통째로 죽어도 다른 출처가 늘어 가려진다.
-  // 실제로 청약홈이 totalCount 0 을 주던 날 아파트·오피스텔·무순위 128건이
-  // 사라졌는데 합계는 80%라 이 가드를 통과했다. 그래서 출처별로도 본다.
-  // source 는 청약홈 항목에 비어 있어 서로 다른 출처가 한 칸에 뭉친다. kind 로 센다.
-  const byKind = (rows) => rows.reduce((m, l) => (m[l.kind] = (m[l.kind] || 0) + 1, m), {});
-  const pb = byKind(prev.listings);
-  const nb = byKind(data.listings);
-  const vanished = Object.entries(pb).filter(([k, n]) => n >= 5 && !nb[k]).map(([k, n]) => `${k}(${n}건→0)`);
+// 상류가 흔들려도 사이트가 거짓말하지 않게 — 판단은 health.mjs 가 한다
+const verdict = assess(prev, data);
+for (const i of verdict.issues) log(`::${i.level === 'error' ? 'error' : 'warning'}::${i.text}`);
 
-  // 전부 무너졌으면 손대지 않는 게 안전하다
-  if (after < before * 0.6 && !vanished.length) {
-    log(`::warning::수집 결과가 ${before}건 → ${after}건으로 급감했습니다. 상류 API 장애로 보고 데이터를 갱신하지 않습니다.`);
-    data.errors.forEach((e) => log(`  ⚠︎ ${e}`));
-    copyAssets();   // 화면 코드는 최신으로 두되 데이터는 그대로 둔다
-    log('화면 코드만 반영하고 종료합니다.');
-    process.exit(0);
-  }
-
-  // 일부 출처만 죽었으면 통째로 버리지 않는다. 죽은 출처는 직전 값을 그대로 쓰고
-  // 나머지는 새로 받은 값을 쓴다. 그래야 멀쩡한 출처의 새 공고가 같이 막히지 않는다.
-  if (vanished.length) {
-    const deadKinds = new Set(Object.keys(pb).filter((k) => pb[k] >= 5 && !nb[k]));
-    carried = prev.listings.filter((l) => deadKinds.has(l.kind));
-    log(`::warning::출처가 통째로 비었습니다: ${vanished.join(', ')}. 해당 ${carried.length}건은 직전 값을 그대로 씁니다.`);
-    data.errors.forEach((e) => log(`  ⚠︎ ${e}`));
-  }
+if (verdict.decision === 'hold') {
+  data.errors.forEach((e) => log(`  ⚠︎ ${e}`));
+  copyAssets();   // 화면 코드는 최신으로 두되 데이터는 그대로 둔다
+  log('데이터를 갱신하지 않고 화면 코드만 반영했습니다.');
+  process.exit(0);
+}
+if (verdict.decision === 'carry') {
+  carried = prev.listings.filter((l) => verdict.carryKinds.includes(l.kind))
+    .map((l) => ({ ...l, staleFrom: prev.builtAt }));   // 언제 것인지 표시해 둔다
 }
 
 log(`상세 보강 (${data.listings.length}건)`);
@@ -121,6 +101,10 @@ if (carried.length) {
   log(`직전 스냅샷에서 ${add.length}건을 이어 붙였습니다.`);
 }
 
+// 낼 준비가 된 목록을 마지막으로 훑는다 — 여기서 걸리면 우리 코드 탓이다
+const flaws = inspect(data.listings);
+for (const f of flaws) log(`::warning::데이터 점검 — ${f.text}`);
+
 // 접수 마감된 공고는 경쟁률이 나오므로 한 번 더 확인해 둔다
 const closed = data.listings.filter((l) => isClosed(l) && !l.cmpet).length;
 
@@ -132,7 +116,8 @@ const snapshot = {
   cmpetBlocked: state.cmpetBlocked,
   corners: CORNERS,
   standards: data.standards,
-  sources: sourceStatus(data),
+  sources: markSources(sourceStatus(data), data.listings, verdict.carryKinds),
+  health: { checkedAt: Date.now(), issues: [...verdict.issues, ...flaws] },
   listings: data.listings,
 };
 

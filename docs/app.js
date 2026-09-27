@@ -1,7 +1,7 @@
 // 서울 청약 대시보드 — 프론트엔드
-import * as Sync from './sync.js?v=1fd7b008';
-import * as Std from './standards.js?v=1fd7b008';
-import * as Rank from './rank.js?v=1fd7b008';
+import * as Sync from './sync.js?v=2fff973d';
+import * as Std from './standards.js?v=2fff973d';
+import * as Rank from './rank.js?v=2fff973d';
 
 const $ = (s) => document.querySelector(s);
 // 화면 조각이 하나라도 빠져 있으면(브라우저에 남은 옛 HTML 등) 예외가 나서
@@ -632,9 +632,35 @@ function renderCorners() {
   $('#cornerDesc').textContent = tabs.find((c) => c.key === filters.corner)?.desc || '';
 }
 
+// 공고 한 건이 이상해서 analyze 가 터지면 목록 계산이 통째로 죽는다.
+// 실제로 그렇게 화면이 빈 적이 있어, 터진 건만 따로 표시하고 나머지는 살린다.
+let analyzeFailures = [];
+
+/** 판정에 실패했을 때 쓰는 최소 형태 — 화면 코드가 그대로 받아 쓸 수 있어야 한다 */
+const fallbackAnalysis = (l) => ({
+  status: { key: 'notice', label: '표시 오류 — 원문을 확인하세요', until: l?.noticeDate ?? null, d: null },
+  score: 0,
+  reasons: [{ t: '이 공고를 판정하지 못했습니다', neg: true }],
+  affordable: 0, pricedCount: 0,
+  minPrice: null, maxPrice: null, minArea: null, maxArea: null, pyeong: null,
+  rental: false, income: null, rank: null,
+  minMonthly: null, maxMonthly: null,
+  eligibleSpecial: [], myScore: 0, cmpetAvg: null,
+  failed: true,
+});
+
+function safeAnalyze(l) {
+  try { return analyze(l); } catch (e) {
+    analyzeFailures.push({ id: l?.id, msg: e.message });
+    console.error('공고를 판정하지 못했습니다', l?.id, e);
+    return fallbackAnalysis(l);
+  }
+}
+
 function visible() {
+  analyzeFailures = [];
   return listings
-    .map((l) => ({ l, a: analyze(l) }))
+    .map((l) => ({ l, a: safeAnalyze(l) }))
     .filter(({ l, a }) => {
       // 스크랩 탭에서는 담아 둔 것을 상태와 무관하게 전부 보여준다
       if (filters.corner === 'scrap') return scraps.has(l.id);
@@ -679,7 +705,22 @@ function renderCards() {
     <div class="stat"><b style="color:var(--warn)">${soon}</b><span>접수 예정</span></div>
     <div class="stat"><b>${fit}</b><span>예산 내 타입 있음</span></div>`;
 
-  for (const { l, a } of rows) cards.appendChild(cardOf(l, a));
+  // 공고 하나가 이상해도 목록 전체가 사라지면 안 된다. 터진 것만 자리를 남긴다.
+  let broke = 0;
+  for (const { l, a } of rows) {
+    try {
+      cards.appendChild(cardOf(l, a));
+    } catch (e) {
+      broke++;
+      console.error('카드를 그리지 못했습니다', l?.id, e);
+      const c = el('div', 'card dim');
+      c.innerHTML = `<div class="card-head"><div><h3>${esc(l?.name || '제목 없음')}</h3>
+        <p class="sub">이 공고를 표시하는 중 문제가 생겼습니다 — 원문에서 확인해 주세요.</p></div></div>`;
+      if (l?.noticeUrl) c.onclick = () => window.open(l.noticeUrl, '_blank', 'noopener');
+      cards.appendChild(c);
+    }
+  }
+  if (broke) console.warn(`${broke}건을 정상적으로 그리지 못했습니다.`);
 }
 
 function cardOf(l, a) {
@@ -703,6 +744,7 @@ function cardOf(l, a) {
       <span class="badge ${st.key === 'live' ? 'live' : (st.key === 'soon' || st.key === 'notice') ? 'soon' : 'done'}">${esc(st.label)}${dText ? ` · ${dText}` : ''}</span>
       <span class="badge tag">${esc(l.kindLabel)}</span>
       ${l.noticeKind && l.noticeKind !== '모집' ? `<span class="badge">${esc(l.noticeKind)}</span>` : ''}
+      ${l.staleFrom ? `<span class="badge stale" title="상류 API 장애로 새로 못 받아, ${new Date(l.staleFrom).toLocaleString('ko-KR')} 자료를 그대로 보여 주는 중입니다">옛 자료</span>` : ''}
       ${l.flags?.priceCap ? '<span class="badge">분양가상한제</span>' : ''}
       ${l.flags?.speculative ? '<span class="badge hot">투기과열</span>' : ''}
       ${a.cmpetAvg != null ? `<span class="badge ${a.cmpetAvg >= 20 ? 'hot' : ''}">경쟁률 ${a.cmpetAvg}:1</span>` : ''}
@@ -1145,6 +1187,10 @@ async function load(refresh = false) {
 
   const banner = $('#banner');
   const notes = [...(data.errors || [])];
+  // 빌드가 남긴 진단 — 상류 장애나 파싱 회귀를 사용자에게도 알린다
+  for (const i of (data.health?.issues || [])) {
+    if (i.level === 'error' || i.level === 'warn') notes.push(i.text);
+  }
   if (data.enriching) notes.push(`상세 정보(분양가·경쟁률) 수집 중 ${data.progress.done}/${data.progress.total} — 잠시 후 자동 갱신됩니다.`);
   banner.hidden = !notes.length;
   banner.textContent = notes.join('  |  ');
