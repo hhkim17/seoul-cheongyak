@@ -737,6 +737,8 @@ function cardOf(l, a) {
 async function openDrawer(id) {
   const drawer = $('#drawer'); const panel = $('#drawerPanel');
   drawer.hidden = false;
+  // 공고 하나를 가리키는 주소를 남겨 둔다 (#n=SH:310107). 이 주소로 바로 열린다.
+  try { history.replaceState(null, '', `#n=${encodeURIComponent(id)}`); } catch { /* 무시 */ }
   panel.innerHTML = '<button class="close-x" data-close>✕</button><p style="color:var(--text-3)">불러오는 중…</p>';
   panel.scrollTop = 0;
   const l = listings.find((x) => x.id === id);
@@ -1147,6 +1149,7 @@ async function load(refresh = false) {
   banner.textContent = notes.join('  |  ');
 
   renderAll();
+  openFromHash();
   schedulePoll(data.enriching ? 6000 : POLL_MS);
 }
 
@@ -1418,7 +1421,24 @@ $('#pSave').onclick = () => {
 /** 열려 있는 모달·상세 패널을 모두 닫는다. 모달을 새로 만들어도 여기 손댈 일이 없다. */
 function closeOverlays() {
   for (const el of document.querySelectorAll('.modal, .drawer')) el.hidden = true;
+  if (location.hash.startsWith('#n=')) {
+    try { history.replaceState(null, '', location.pathname + location.search); } catch { /* 무시 */ }
+  }
 }
+
+/** 주소에 #n=<공고id> 가 있으면 그 공고를 연다 */
+function openFromHash() {
+  const m = /^#n=(.+)$/.exec(location.hash);
+  if (!m) return;
+  const id = decodeURIComponent(m[1]);
+  if (listings.some((l) => l.id === id)) openDrawer(id);
+  else {
+    const b = $('#banner');
+    b.hidden = false;
+    b.textContent = '주소가 가리키는 공고를 찾지 못했습니다. 접수가 끝나 목록에서 내려갔을 수 있습니다.';
+  }
+}
+window.addEventListener('hashchange', openFromHash);
 
 document.addEventListener('click', (e) => {
   const dl = e.target.closest('[data-dl]');
