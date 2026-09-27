@@ -472,7 +472,7 @@ export const myhomeIsSeoul = (r) =>
 
 // ── SH·HUG 게시판 수집분 정규화 ──────────────────────────────────────
 // 서울시 청년안심주택 포털의 민간임대 공고. SH 게시판에는 공공임대분만 올라와서
-// 이쪽을 따로 읽는다. 목록에 마감일만 있고 시작일은 없어, 시작일은 비워 둔다.
+// 이쪽을 따로 읽는다. 접수기간은 본문 [공급일정]의 «청약신청» 줄에서 읽어 온다.
 export function normalizeYouthSafe(r) {
   const name = r.title.replace(/^\[민간임대\]\s*/, '');
   return {
@@ -483,12 +483,12 @@ export function normalizeYouthSafe(r) {
     gu: guFromAddress(name),
     totalUnits: null,
     noticeDate: toISO(r.noticeDate),
-    receiptStart: null, receiptEnd: toISO(r.deadline),
-    rank1Start: null, rank1End: toISO(r.deadline),
+    receiptStart: toISO(r.receiptStart), receiptEnd: toISO(r.receiptEnd),
+    rank1Start: toISO(r.receiptStart), rank1End: toISO(r.receiptEnd),
     resultDate: null, contractStart: null, contractEnd: null, moveIn: '',
     developer: r.operator || '민간 사업주체', builder: '', tel: '1600-3456',
     homepage: 'https://soco.seoul.go.kr/youth/main/main.do', noticeUrl: r.url,
-    subType: '청년안심주택', scheduleUnknown: !r.deadline,
+    subType: '청년안심주택', scheduleUnknown: !r.receiptStart,
     noticeKind: r.noticeKind || classifyNotice(r.title),
     criteria: null, attachments: [],
     models: [], cmpet: null, score: null, flags: {},

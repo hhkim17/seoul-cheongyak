@@ -276,6 +276,35 @@ const SOCO_JSON = 'https://soco.seoul.go.kr/youth/pgm/home/yohome/bbsListJson.js
 const SOCO_LIST = 'https://soco.seoul.go.kr/youth/bbs/BMSR00015/list.do?menuNo=400008';
 const SOCO_VIEW = 'https://soco.seoul.go.kr/youth/bbs/BMSR00015/view.do?menuNo=400008&boardId=';
 
+/**
+ * 청년안심주택 본문의 «[공급일정] ■청약신청 : ‘26. 09. 30. (수) 09:00 ~ 10. 05. (월) 23:00»
+ * 에서 접수 시작·종료를 읽는다. 끝 날짜는 연도를 생략하고, 당일 마감이면 시각만 적는다.
+ */
+export function youthSafeSchedule(html) {
+  const text = strip(String(html || ''));
+  const seg = text.match(/청약\s?신청[^■]{0,160}/);
+  if (!seg) return null;
+  const t = seg[0];
+
+  const m = t.match(/['‘’ʼ]?\s*(\d{2})\s*\.\s*(\d{1,2})\s*\.\s*(\d{1,2})/);
+  if (!m) return null;
+  const y = 2000 + Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const from = `${y}-${pad(mo)}-${pad(d)}`;
+
+  const rest = t.slice(t.indexOf('~') + 1);
+  if (!t.includes('~')) return { from, to: from };
+
+  // «10. 05.» 처럼 연도를 생략한 끝 날짜. 시각(09:00)과 헷갈리지 않게 점을 요구한다.
+  const e = rest.match(/(?:['‘’ʼ]?\s*(\d{2})\s*\.\s*)?(\d{1,2})\s*\.\s*(\d{1,2})\s*\./);
+  if (!e) return { from, to: from };            // 당일 마감 — 시각만 적힌 경우
+  const emo = Number(e[2]), ed = Number(e[3]);
+  if (emo < 1 || emo > 12 || ed < 1 || ed > 31) return { from, to: from };
+  const ey = e[1] ? 2000 + Number(e[1]) : (emo < mo ? y + 1 : y);   // 해를 넘기면 +1
+  const to = `${ey}-${pad(emo)}-${pad(ed)}`;
+  return { from, to: to >= from ? to : from };
+}
+
 /** 청년안심주택 모집공고 목록. 민간임대가 대부분이고 공공임대도 섞여 있다. */
 export async function scrapeYouthSafe({ pages = 3 } = {}) {
   const out = [];
@@ -295,11 +324,15 @@ export async function scrapeYouthSafe({ pages = 3 } = {}) {
     for (const r of rows) {
       const title = strip(String(r.nttSj || ''));
       if (!title) continue;
+      // optn4 는 마감일이 아니라 청약신청 '시작일'이다. 목록만 보고 마감으로
+      // 쓰다가 아직 사흘 남은 공고를 마감으로 표시한 적이 있다.
+      const sched = youthSafeSchedule(r.content);
       out.push({
         seq: String(r.boardId),
         title,
         noticeDate: r.optn1 || null,          // 공고일
-        deadline: r.optn4 || null,            // 접수 마감일
+        receiptStart: sched?.from || r.optn4 || null,
+        receiptEnd: sched?.to || null,
         operator: strip(String(r.optn3 || '')), // 사업주체
         url: SOCO_VIEW + r.boardId,
         // "최초모집"이 본공고, "추가모집"은 잔여세대 재모집이다
