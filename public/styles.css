@@ -330,3 +330,8 @@ details.help th { text-align: left; }
 .src-guide .why { margin: 9px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-3); }
 .src-guide a { color: var(--accent); }
 @media (max-width: 560px) { .src-guide dl { grid-template-columns: 1fr; gap: 2px; } .src-guide dt { margin-top: 6px; } }
+
+/* 출처 패널의 다시 받기 버튼 */
+.source-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; }
+.source-actions button { font-size: 12.5px; padding: 7px 12px; }
+.source-actions .fineprint { margin-left: 2px; }

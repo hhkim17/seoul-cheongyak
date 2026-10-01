@@ -109,6 +109,14 @@
       <details id="sources" class="sources" hidden>
         <summary></summary>
         <div id="sourceList" class="source-list"></div>
+        <div class="source-actions">
+          <button type="button" id="btnReload" class="ghost">데이터 새로고침</button>
+          <button type="button" id="btnRecollect" class="ghost">기관에서 다시 수집 ↗</button>
+          <span id="reloadMsg" class="fineprint"></span>
+        </div>
+        <p class="fineprint"><b>데이터 새로고침</b>은 이 브라우저가 들고 있는 목록을 서버의 최신 것으로 다시 받습니다.
+          <b>기관에서 다시 수집</b>은 청약홈·LH·SH 등에 새로 물어보는 작업을 돌립니다 — GitHub 작업 페이지가 열리고,
+          <b>Run workflow</b>를 누르면 3~5분 뒤 반영됩니다.</p>
         <p class="fineprint">인증키는 하나지만 <b>API마다 활용신청이 따로</b>입니다. 개발계정은 자동승인이고, 신청 직후 반영까지 최대 1시간 걸릴 수 있습니다.</p>
       </details>
       <div id="summary" class="summary"></div>

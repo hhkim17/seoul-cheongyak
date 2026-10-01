@@ -1212,26 +1212,45 @@ function schedulePoll(ms) {
 // 탭으로 돌아오면 즉시 한 번 맞춘다
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
 
+// 출처마다 사정이 다르다. '연결 안 됨'과 '지금 물량이 없음'을 한 덩어리로
+// 묶으면, 멀쩡한데 고장난 줄 알게 된다.
+const SOURCE_STATE = {
+  ok:     { dot: '🟢', word: null },
+  idle:   { dot: '⚪', word: '지금 올라온 공고가 없습니다' },
+  stale:  { dot: '🟠', word: '상류 장애 — 직전 자료를 보여 주는 중' },
+  failed: { dot: '🔴', word: '연결되지 않았습니다' },
+};
+
 function renderSources(sources) {
   const box = $('#sources');
   if (!Array.isArray(sources) || !sources.length) { box.hidden = true; return; }
   box.hidden = false;
-  const off = sources.filter((s) => !s.ok).length;
-  box.querySelector('summary').textContent = off
-    ? `데이터 연결 상태 — ${sources.length}개 중 ${off}개 미연결 (활용신청 필요)`
-    : `데이터 연결 상태 — ${sources.length}개 모두 연결됨`;
-  if (off) box.open = true;
 
-  $('#sourceList').innerHTML = sources.map((s) => `
-    <div class="source${s.ok ? '' : ' off'}">
-      <span class="dot">${s.ok ? '🟢' : '🟡'}</span>
+  const stateOf = (s) => s.state || (s.ok ? 'ok' : 'failed');
+  const bad = sources.filter((s) => ['failed', 'stale'].includes(stateOf(s)));
+  const idle = sources.filter((s) => stateOf(s) === 'idle');
+  box.querySelector('summary').textContent = bad.length
+    ? `데이터 연결 상태 — ${sources.length}개 중 ${bad.length}개 문제`
+    : idle.length
+      ? `데이터 연결 상태 — 모두 정상 (${idle.length}곳은 지금 물량 없음)`
+      : `데이터 연결 상태 — ${sources.length}개 모두 정상`;
+  if (bad.length) box.open = true;
+
+  $('#sourceList').innerHTML = sources.map((s) => {
+    const st = stateOf(s);
+    const v = SOURCE_STATE[st] || SOURCE_STATE.ok;
+    const note = s.note || v.word;
+    return `
+    <div class="source${st === 'ok' ? '' : ' off'}">
+      <span class="dot">${v.dot}</span>
       <div>
-        <div class="nm">${esc(s.name)}</div>
+        <div class="nm">${esc(s.name)}${s.count ? ` <span class="hint">${s.count}건</span>` : ''}</div>
         <div class="use">${esc(s.use)}</div>
-        <div class="org">${esc(s.org)}${s.required ? ' · 필수' : ''}${s.scraped ? ' · 게시판 직접 수집' : ''}</div>
+        <div class="org">${esc(s.org)}${s.required ? ' · 필수' : ''}${s.scraped ? ' · 게시판 직접 수집' : ''}${note ? ` · ${esc(note)}` : ''}</div>
       </div>
-      <a href="${esc(s.url)}" target="_blank" rel="noopener">${s.scraped ? '원본 ↗' : s.ok ? '문서 ↗' : '활용신청 ↗'}</a>
-    </div>`).join('');
+      <a href="${esc(s.url)}" target="_blank" rel="noopener">${s.scraped ? '원본 ↗' : st === 'failed' ? '활용신청 ↗' : '문서 ↗'}</a>
+    </div>`;
+  }).join('');
 }
 
 function renderAll() { renderMeCard(); renderCorners(); renderFilters(); renderCards(); }
@@ -1361,6 +1380,31 @@ $('#keySave').onclick = async () => {
 $('#keyInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#keySave').click(); });
 
 $('#btnRefresh').onclick = () => load(true);   // 목록만 다시 받기 (빠름)
+// 정적 배포에서는 화면이 직접 기관에 물어볼 수 없다. 두 가지를 나눠 둔다.
+//  · 새로고침 — 서버에 올라와 있는 최신 스냅샷을 다시 받는다 (브라우저 캐시 우회)
+//  · 다시 수집 — 수집 작업을 돌리는 GitHub 작업 페이지를 연다
+const RECOLLECT_URL = 'https://github.com/hhkim17/seoul-cheongyak/actions/workflows/refresh.yml';
+
+if ($('#btnReload')) $('#btnReload').onclick = async () => {
+  const b = $('#btnReload'); const msg = $('#reloadMsg');
+  b.disabled = true; msg.textContent = '다시 받는 중…';
+  const before = listings.length;
+  try {
+    await load(false);
+    const t = meta?.builtAt ? new Date(meta.builtAt).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    msg.textContent = `${listings.length}건을 받았습니다${listings.length !== before ? ` (${before}건 → ${listings.length}건)` : ' · 바뀐 내용 없음'}${t ? ` · ${t} 기준` : ''}`;
+  } catch (e) {
+    msg.textContent = `받지 못했습니다: ${e.message}`;
+  }
+  b.disabled = false;
+  setTimeout(() => { msg.textContent = ''; }, 8000);
+};
+
+if ($('#btnRecollect')) $('#btnRecollect').onclick = () => {
+  window.open(RECOLLECT_URL, '_blank', 'noopener');
+  $('#reloadMsg').textContent = 'GitHub 작업 페이지에서 Run workflow 를 누르면 3~5분 뒤 반영됩니다.';
+};
+
 if ($('#btnProfile')) $('#btnProfile').onclick = openProfile;
 
 if ($('#pOwnedBefore')) $('#pOwnedBefore').onclick = (e) => {

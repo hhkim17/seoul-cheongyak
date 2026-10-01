@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>서울 청약 대시보드</title>
-<link rel="stylesheet" href="styles.css?v=b2af2065">
+<link rel="stylesheet" href="styles.css?v=91242e42">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🏙️</text></svg>">
 </head>
 <body>
@@ -109,6 +109,14 @@
       <details id="sources" class="sources" hidden>
         <summary></summary>
         <div id="sourceList" class="source-list"></div>
+        <div class="source-actions">
+          <button type="button" id="btnReload" class="ghost">데이터 새로고침</button>
+          <button type="button" id="btnRecollect" class="ghost">기관에서 다시 수집 ↗</button>
+          <span id="reloadMsg" class="fineprint"></span>
+        </div>
+        <p class="fineprint"><b>데이터 새로고침</b>은 이 브라우저가 들고 있는 목록을 서버의 최신 것으로 다시 받습니다.
+          <b>기관에서 다시 수집</b>은 청약홈·LH·SH 등에 새로 물어보는 작업을 돌립니다 — GitHub 작업 페이지가 열리고,
+          <b>Run workflow</b>를 누르면 3~5분 뒤 반영됩니다.</p>
         <p class="fineprint">인증키는 하나지만 <b>API마다 활용신청이 따로</b>입니다. 개발계정은 자동승인이고, 신청 직후 반영까지 최대 1시간 걸릴 수 있습니다.</p>
       </details>
       <div id="summary" class="summary"></div>
@@ -404,6 +412,6 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=b2af2065"></script>
+<script type="module" src="app.js?v=91242e42"></script>
 </body>
 </html>
