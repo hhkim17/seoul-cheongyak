@@ -1,7 +1,7 @@
 // 서울 청약 대시보드 — 프론트엔드
-import * as Sync from './sync.js?v=91242e42';
-import * as Std from './standards.js?v=91242e42';
-import * as Rank from './rank.js?v=91242e42';
+import * as Sync from './sync.js?v=6d40eed3';
+import * as Std from './standards.js?v=6d40eed3';
+import * as Rank from './rank.js?v=6d40eed3';
 
 const $ = (s) => document.querySelector(s);
 // 화면 조각이 하나라도 빠져 있으면(브라우저에 남은 옛 HTML 등) 예외가 나서
@@ -1216,7 +1216,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) load
 // 묶으면, 멀쩡한데 고장난 줄 알게 된다.
 const SOURCE_STATE = {
   ok:     { dot: '🟢', word: null },
-  idle:   { dot: '⚪', word: '지금 올라온 공고가 없습니다' },
+  idle:   { dot: '⚪', word: '0건으로 조회됨 — 원본도 비었는지 확인해 보세요' },
   stale:  { dot: '🟠', word: '상류 장애 — 직전 자료를 보여 주는 중' },
   failed: { dot: '🔴', word: '연결되지 않았습니다' },
 };

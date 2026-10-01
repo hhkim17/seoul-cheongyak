@@ -178,7 +178,9 @@ export function markSources(sources, listings, carryKinds = []) {
     // 보조 API는 공고를 만들어 내지 않고 상세(경쟁률·첨부·주택형)만 채운다
     if (s.role === 'support') return { ...s, state: 'ok' };
     const n = bySource[s.id];
-    if (n === undefined) return { ...s, state: 'idle', note: '지금 올라온 공고가 없습니다' };
+    // HUG 가 그랬듯, 0건은 '없다'가 아니라 '우리가 0건으로 받아 왔다'일 뿐이다.
+    // 단정해서 적었다가 수집기가 잘못 묻고 있는 걸 반년 가까이 못 봤다.
+    if (n === undefined) return { ...s, state: 'idle', note: '0건으로 조회됨 — 원본도 비었는지 확인해 보세요' };
     return { ...s, state: 'ok', count: n };
   });
 }
