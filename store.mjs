@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,7 +26,15 @@ export function getServiceKey() {
   return process.env.APPLYHOME_SERVICE_KEY || readConfig().serviceKey || null;
 }
 
-const safe = (k) => k.replace(/[^a-zA-Z0-9_.:-]/g, '_');
+// 파일명으로 쓸 수 없는 글자를 _ 로 바꾸기만 하면 한글 키가 통째로 뭉개진다.
+// 실제로 enrich_HUG:20260930:강서구 와 …금천구 가 모두 enrich_HUG:20260930:___
+// 가 되어 12개 자치구가 캐시 한 칸을 나눠 쓰고 서로의 주택 목록을 덮어썼다.
+// 읽을 수 있게 앞부분은 남기되, 뒤에 원본 키의 해시를 붙여 충돌을 없앤다.
+const safe = (k) => {
+  const plain = String(k).replace(/[^a-zA-Z0-9_.:-]/g, '_');
+  const sum = crypto.createHash('sha1').update(String(k)).digest('hex').slice(0, 10);
+  return `${plain.slice(0, 60)}-${sum}`;
+};
 
 export function cacheGet(key, maxAgeMs) {
   const f = path.join(CACHE, `${safe(key)}.json`);
