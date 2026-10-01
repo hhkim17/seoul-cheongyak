@@ -521,32 +521,40 @@ export function normalizeSh(r) {
 
 export function normalizeHug(r) {
   const [from, to] = String(r.period || '').split(/\s*[~\-–]\s*/);
-  const area = n(r.area);
-  const deposit = n(r.deposit);
+  const units = r.units || [];
   const toManwon = (v) => (v == null ? null : v >= 1000000 ? Math.round(v / 10000) : v);
-  const addr = [r.sido, r.sigungu, r.address].filter(Boolean).join(' ');
+  const deposits = units.map((u) => toManwon(n(u.deposit))).filter((v) => v != null);
+  const addr = `서울특별시 ${r.gu}`;
 
+  // 한 공고 안의 여러 호를 자치구 단위로 묶어 한 장으로 둔다.
+  // 호마다 카드를 만들면 418장이 되어 다른 공고가 전부 묻힌다.
   return {
-    kind: 'HUG', kindLabel: r.houseType || '든든전세주택', source: 'HUG',
-    houseManageNo: r.no, pblancNo: r.no, id: `HUG:${r.no}`,
-    name: `${r.sigungu || ''} ${r.address || ''}`.trim() || `든든전세주택 ${r.no}`,
-    areaName: r.sido || '서울', address: addr,
-    gu: guFromAddress(addr),
-    totalUnits: 1,
+    kind: 'HUG', kindLabel: '든든전세주택', source: 'HUG',
+    houseManageNo: `${r.noticeDate}-${r.gu}`, pblancNo: r.noticeDate,
+    id: `HUG:${r.noticeDate}:${r.gu}`,
+    name: `HUG 든든전세주택 ${r.gu} ${units.length}호 (${toISO(r.noticeDate) || r.noticeDate} 공고)`,
+    areaName: '서울', address: addr,
+    gu: SEOUL_GU.includes(r.gu) ? r.gu : guFromAddress(addr),
+    totalUnits: units.length,
     noticeDate: toISO(r.noticeDate),
     receiptStart: toISO(from), receiptEnd: toISO(to) || toISO(from),
     rank1Start: toISO(from), rank1End: toISO(to) || toISO(from),
     resultDate: null, contractStart: null, contractEnd: null, moveIn: '',
     developer: 'HUG 주택도시보증공사', builder: '', tel: '1566-9009',
     homepage: 'https://www.khug.or.kr/jeonse/web/s07/s070101.jsp',
-    noticeUrl: r.url,
+    noticeUrl: 'https://www.khug.or.kr/jeonse/web/s07/s070102.jsp',
     subType: r.buyType, scheduleUnknown: !from,
     attachments: [],
-    models: [{
-      modelNo: r.no, houseType: r.houseType || '전용', exclusiveArea: area,
-      supplyArea: null, generalUnits: 1, specialUnits: 0, special: {},
-      priceManwon: null, depositManwon: toManwon(deposit), monthlyManwon: null,
-    }],
-    cmpet: null, score: null, flags: {},
+    models: units.map((u) => ({
+      modelNo: u.no,
+      houseType: `${u.houseType || '전용'} · ${u.address || ''}`.trim(),
+      exclusiveArea: n(u.area), supplyArea: null,
+      generalUnits: 1, specialUnits: 0, special: {},
+      priceManwon: null, depositManwon: toManwon(n(u.deposit)), monthlyManwon: null,
+      applicants: n(u.applicants),
+    })),
+    cmpet: null, score: null,
+    flags: { depositMin: deposits.length ? Math.min(...deposits) : null },
   };
 }
+

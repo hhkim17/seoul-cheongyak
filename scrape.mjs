@@ -380,22 +380,51 @@ export async function scrapeYouthSafe({ pages = 3 } = {}) {
 const HUG_LIST = 'https://www.khug.or.kr/jeonse/web/s07/s070102.jsp';
 
 /** 표 헤더: 번호 공고일자 청약접수기간 시도 시군구 주소 주택유형 매입유형 전용면적 임대보증금액 신청자수 */
-export async function scrapeHug() {
-  const html = await get(HUG_LIST, { charset: 'euc-kr' });
-  const trs = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => m[1]);
-  const out = [];
-  for (const tr of trs) {
-    const c = cellsOf(tr);
-    if (c.length < 8 || c[0] === '번호' || !/^\d+$/.test(c[0])) continue;
-    out.push({
-      no: c[0], noticeDate: c[1], period: c[2], sido: c[3], sigungu: c[4],
-      address: c[5], houseType: c[6], buyType: c[7],
-      area: c[8] ?? '', deposit: c[9] ?? '', applicants: c[10] ?? '',
-      url: HUG_LIST,
-    });
+export async function scrapeHug({ maxPages = 80 } = {}) {
+  // 이 게시판은 그냥 열면 view_Count=N 이라 «등록된 게시물이 없습니다»만 돌려준다.
+  // 조회 버튼이 view_Count=Y 로 다시 부르는 구조라, 그걸 그대로 흉내 낸다.
+  // CMB_SIDO=01 이 서울이고, 페이징은 cur_page 다.
+  const base = `${HUG_LIST}?BJAMT=&sbGugun=&view_Count=Y&BJAREA=&BJORDER=&CMB_SIDO=01`;
+  const units = [];
+  let pages = 1;
+
+  for (let page = 1; page <= Math.min(pages, maxPages); page++) {
+    const html = await get(`${base}&cur_page=${page}`, { charset: 'euc-kr' });
+    if (page === 1) {
+      const nums = [...html.matchAll(/cur_page=(\d+)/g)].map((m) => Number(m[1]));
+      pages = nums.length ? Math.max(...nums) : 1;
+    }
+    const body = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/)?.[1] ?? '';
+    const trs = [...body.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => m[1]);
+    let got = 0;
+    for (const tr of trs) {
+      const c = cellsOf(tr);
+      if (c.length < 10 || !/^\d+$/.test(c[0])) continue;
+      got++;
+      units.push({
+        no: c[0], noticeDate: c[1], period: c[2], sido: c[3], sigungu: c[4],
+        address: c[5], houseType: c[6], buyType: c[7],
+        area: c[8] ?? '', deposit: c[9] ?? '', applicants: c[10] ?? '',
+      });
+    }
+    if (!got) break;                       // 빈 페이지면 그만
+    await new Promise((r) => setTimeout(r, 400));   // 서버 배려
   }
-  return out;
+
+  // 418호가 전부 한 공고에 속한다. 낱개로 두면 목록이 묻히므로
+  // «공고 + 자치구» 로 묶어 한 장씩 만든다 — 자치구 필터도 그래야 걸린다.
+  const groups = new Map();
+  for (const u of units) {
+    const gu = String(u.sigungu || '').replace(/^서울\s*/, '').trim();
+    const key = `${u.noticeDate}|${u.period}|${gu}`;
+    if (!groups.has(key)) {
+      groups.set(key, { noticeDate: u.noticeDate, period: u.period, sido: u.sido, gu, buyType: u.buyType, units: [] });
+    }
+    groups.get(key).units.push(u);
+  }
+  return [...groups.values()].sort((a, b) => b.units.length - a.units.length);
 }
+
 
 // ── 도시근로자 가구원수별 월평균소득 기준표 ─────────────────────────
 // SH가 공표 표를 웹으로 올려 둔다. 매년 3월 통계청 발표 후 갱신되므로
