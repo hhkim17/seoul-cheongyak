@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { getServiceKey } from './store.mjs';
 import { collectListings, enrichMany, readCriteriaMany, isClosed, sourceStatus, log, state } from './collect.mjs';
 import { CORNERS } from './normalize.mjs';
-import { assess, inspect, markSources } from './health.mjs';
+import { assess, carryable, inspect, markSources } from './health.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
@@ -82,8 +82,9 @@ if (verdict.decision === 'hold') {
   process.exit(0);
 }
 if (verdict.decision === 'carry') {
-  carried = prev.listings.filter((l) => verdict.carryKinds.includes(l.kind))
-    .map((l) => ({ ...l, staleFrom: prev.builtAt }));   // 언제 것인지 표시해 둔다
+  // 처음 이어 붙인 시각을 지켜야 7일 상한이 걸린다 — 빌드마다 새로 찍으면 영원히 남는다
+  carried = prev.listings.filter((l) => verdict.carryKinds.includes(l.kind) && carryable(l))
+    .map((l) => ({ ...l, staleFrom: l.staleFrom ?? prev.builtAt }));
 }
 
 log(`상세 보강 (${data.listings.length}건)`);

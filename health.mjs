@@ -30,6 +30,18 @@ const CARRY_MAX_DAYS = 7;
 /** 합계가 이 아래로 떨어지면 통째로 손대지 않는다 */
 const TOTAL_FLOOR = 0.6;
 
+/**
+ * 직전 자료 중 이어 붙여도 되는 것. 접수가 끝난 공고나 이미 오래 이어 온 공고는 뺀다.
+ * HUG 든든전세가 마감되어 0건이 됐는데 '상류 장애'로 읽혀 마감된 14건을 계속 냈고,
+ * staleFrom 을 빌드마다 새로 찍어 7일 상한도 걸리지 않았다.
+ */
+export function carryable(l, now = Date.now()) {
+  const today = new Date(now + 9 * 3600000).toISOString().slice(0, 10);   // KST
+  if (l.receiptEnd && l.receiptEnd < today) return false;
+  if (l.staleFrom && (now - l.staleFrom) / DAY > CARRY_MAX_DAYS) return false;
+  return true;
+}
+
 const countBy = (rows, f) => rows.reduce((m, r) => (m[f(r)] = (m[f(r)] || 0) + 1, m), {});
 const pct = (n, d) => (d ? n / d : 0);
 
@@ -47,8 +59,14 @@ export function assess(prev, next) {
   const after = next.listings ?? [];
 
   // ── 1. 출처별 생사 ────────────────────────────────────────────────
-  const pb = countBy(before, (l) => l.kind);
+  // 마감으로 사라진 건 고장이 아니므로, 아직 살아 있어야 할 공고만 센다
+  const live = before.filter((l) => carryable(l));
+  const pb = countBy(live, (l) => l.kind);
   const nb = countBy(after, (l) => l.kind);
+  const allPb = countBy(before, (l) => l.kind);
+  for (const k of Object.keys(allPb)) {
+    if (allPb[k] >= VANISH_MIN && !pb[k] && !nb[k]) add('info', `${k} 공고가 모두 마감되어 비었습니다 (${allPb[k]}건)`);
+  }
   // 0이 된 것뿐 아니라 '거의 다 사라진' 것도 고장으로 본다. 청약홈이 42건을
   // 3건으로 돌려준 적이 있는데, 0이 아니라는 이유로 그냥 통과했다.
   const dead = Object.keys(pb).filter((k) => pb[k] >= VANISH_MIN && !nb[k]);
@@ -58,7 +76,7 @@ export function assess(prev, next) {
   // ── 2. 메워 봐도 모자라면 손대지 않는다 ───────────────────────────
   const prevAge = prev?.builtAt ? (Date.now() - prev.builtAt) / DAY : Infinity;
   const canCarry = before.length > 0 && prevAge <= CARRY_MAX_DAYS;
-  const carriedCount = canCarry ? before.filter((l) => broken.includes(l.kind)).length : 0;
+  const carriedCount = canCarry ? live.filter((l) => broken.includes(l.kind)).length : 0;
   const projected = after.length + carriedCount;
   const detail = broken.map((k) => `${k}(${pb[k]}건→${nb[k] || 0})`).join(', ');
 
