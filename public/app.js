@@ -1115,18 +1115,29 @@ async function saveMail() {
     m.textContent = '알림을 받으려면 이메일 주소를 입력해 주세요.';
     return;
   }
-  schedulePush();
   const msg = $('#mailMsg');
 
   if (STATIC) {
-    // 정적 사이트에는 저장할 서버가 없다 — 붙여 넣을 내용을 보여 준다
-    msg.className = 'msg';
-    msg.textContent = '이 사이트에는 저장할 서버가 없습니다. 아래 내용을 watch.json에 넣어 주세요.';
-    $('#mailJson').textContent = JSON.stringify(watchCfg, null, 2);
-    $('#mailManual').hidden = false;
-    $('#mailManual').open = true;
+    // 공개 사이트에서는 계정(Supabase)이 저장소다. watch.json 은 로컬 개발용이라
+    // 방문자에게 보일 일이 아니다 — 예전에는 JSON 을 붙여 넣으라고 띄웠다.
+    if (!Sync.user()) {
+      msg.className = 'msg ok';
+      msg.textContent = '이 브라우저에 저장했습니다. 메일로 받으려면 로그인한 뒤 알림을 켜 주세요.';
+      return;
+    }
+    try {
+      await Sync.push({ profile, scraps: [...scraps], watch: watchCfg, notifyEmail, email: alertEmail });
+      msg.className = 'msg ok';
+      msg.textContent = notifyEmail
+        ? '계정에 저장했습니다. 조건에 맞는 새 공고가 올라오면 메일로 알려 드립니다.'
+        : '계정에 저장했습니다.';
+    } catch (e) {
+      msg.className = 'msg err';
+      msg.textContent = `저장하지 못했습니다: ${e.message}`;
+    }
     return;
   }
+  schedulePush();
   try {
     const res = await fetch('/api/watch', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
