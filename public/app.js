@@ -80,9 +80,6 @@ let STD = null;   // { urban: {year, base}, median: {year, base} }
  * 청약 가점의 '부양가족 수'와 다르다 — 부모님과 사는 미혼 청년은
  * 부양가족 0명이지만 세대원은 3명이다. 따로 받되, 없으면 갈음한다.
  */
-/** n년 뒤 시점의 값으로 바꿔 본다 (납입은 매월 이어간다고 가정) */
-const shift = (v, perYear) => (v == null ? v : v + perYear * futureYears);
-const futureAge = () => { const a = myAgeYears(); return a == null ? null : a + futureYears; };
 
 const householdSize = () => Math.max(1, Number(profile.householdCount) || (Number(profile.family) || 0) + 1);
 const myAgeYears = () => (profile.birthYm ? Math.floor(yearsBetween(`${profile.birthYm}-01`) ?? 0) : null);
@@ -110,7 +107,7 @@ function incomeCheck(l) {
     dualIncome: profile.dualIncome,
     household: householdSize(),
     newbornCount: Number(profile.newbornCount) || 0,
-    tier: Std.guessTier({ ageYears: futureAge(), special: profile.special }),
+    tier: Std.guessTier({ ageYears: myAgeYears(), special: profile.special }),
   }, STD);
 }
 
@@ -119,8 +116,26 @@ const STATUSES = [
   { key: 'soon', label: '접수예정' },
   { key: 'result', label: '발표대기' },
   { key: 'notice', label: '일정 미상' },
-  { key: 'done', label: '종료' },
+  { key: 'docs', label: '서류심사 대상자 발표' },
+  // 종료는 고르는 항목이 아니다 — 마감 후 일주일 동안만 목록 끝에 남았다가 사라진다
 ];
+
+/** SH 등이 따로 올리는 «서류심사대상자 발표 및 서류제출 안내» 글 */
+const isDocsNotice = (l) => l.noticeKind === '발표' && /서류\s*(심사|제출)\s*대상/.test(l.name || '');
+
+// 왼쪽 «대상» 필터. 분양은 주택형별 특별공급 물량으로, 임대는 공고명으로 가린다
+// (청년안심주택·신혼신생아 매입임대처럼 대상이 이름에 들어 있고, 물량 표는 없다).
+const TARGETS = [
+  { key: 'newlywed',   label: '신혼부부',   field: 'newlywed',   re: /신혼|신생아/ },
+  { key: 'youth',      label: '청년',       field: 'youth',      re: /청년|대학생|기숙사/ },
+  { key: 'firstLife',  label: '생애최초',   field: 'firstLife',  re: /생애\s*최초/ },
+  { key: 'newborn',    label: '신생아',     field: 'newborn',    re: /신생아/ },
+  { key: 'multichild', label: '다자녀',     field: 'multichild', re: /다자녀/ },
+  { key: 'oldParents', label: '노부모부양', field: 'oldParents', re: /노부모/ },
+];
+const offersTarget = (l, t) =>
+  (l.models || []).some((m) => (m.special?.[t.field] || 0) > 0)
+  || t.re.test(`${l.name ?? ''} ${l.kindLabel ?? ''} ${l.subType ?? ''}`);
 
 // ── 날짜에서 기간 뽑기 ───────────────────────────────────────────────
 const yearsBetween = (from, to = new Date()) => {
@@ -193,7 +208,7 @@ function accountScore(y) {
 }
 function familyScore(n) { return Math.min(35, 5 + (Number(n) || 0) * 5); }
 function totalScore(p) {
-  return noHouseScore(shift(noHouseYearsOf(p), 1), noHouseStarted(p, futureYears)) + accountScore(shift(accountYearsOf(p), 1)) + familyScore(p.family);
+  return noHouseScore(noHouseYearsOf(p), noHouseStarted(p)) + accountScore(accountYearsOf(p)) + familyScore(p.family);
 }
 
 // ── 상태 판정 ────────────────────────────────────────────────────────
@@ -208,6 +223,7 @@ function windows(l) {
 }
 
 function statusOf(l) {
+  if (isDocsNotice(l)) return { key: 'docs', label: '서류심사 대상자 발표', until: l.noticeDate, d: null };
   const w = windows(l);
   const open = w.find((x) => x.from <= TODAY && TODAY <= x.to);
   if (open) return { key: 'live', label: `${open.label} 접수중`, until: open.to, d: dayDiff(open.to) };
@@ -285,10 +301,8 @@ const DEFAULT_WATCH = {
 };
 let watchCfg = { ...DEFAULT_WATCH, ...JSON.parse(localStorage.getItem('cheongyak.watch') || '{}') };
 
-// 통장·무주택 기간이 쌓이면 순위와 가점이 달라진다. 결혼 시점과 무관하게 미리 본다.
-let futureYears = 0;
-
-let filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false, incomeFitOnly: false, eligibleOnly2: false };
+const defaultFilters = () => ({ status: STATUSES.map((s) => s.key), target: [], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false, incomeFitOnly: false, eligibleOnly2: false });
+let filters = defaultFilters();
 let listings = [];
 let meta = {};
 
@@ -315,8 +329,8 @@ function analyze(l) {
   const prefAreas = allAreas.filter((a) => a >= profile.areaMin && a <= profile.areaMax);
   const rankArea = prefAreas.length ? Math.min(...prefAreas) : (allAreas.length ? Math.min(...allAreas) : null);
   const rank = Rank.judgeRank(l, {
-    accountYears: shift(accountYearsOf(profile), 1),
-    payments: shift(profile.payments, 12),
+    accountYears: accountYearsOf(profile),
+    payments: profile.payments,
     depositManwon: profile.depositManwon,
   }, rankArea);
   const reasons = [];
@@ -513,32 +527,9 @@ function chipRow(container, options, selected, onToggle) {
   }
 }
 
-const FUTURE_OPTIONS = [
-  { key: '0', label: '지금' }, { key: '1', label: '+1년' }, { key: '2', label: '+2년' }, { key: '3', label: '+3년' },
-];
-
-function renderFuture() {
-  chipRow($('#fFuture'), FUTURE_OPTIONS, [String(futureYears)], (k) => {
-    futureYears = Number(k);
-    cutlineCache = null;
-    renderAll();
-  });
-
-  const note = $('#futureNote');
-  if (!futureYears) { note.textContent = ''; return; }
-  const age = futureAge();
-  const lines = [`통장 ${Math.floor(shift(accountYearsOf(profile), 1))}년`];
-  if (profile.payments != null) lines.push(`납입 ${shift(profile.payments, 12)}회`);
-  lines.push(`무주택 ${Math.floor(shift(noHouseYearsOf(profile), 1))}년`);
-  note.innerHTML = `${futureYears}년 뒤 기준 · ${lines.join(' · ')} <span class="hint">(매월 납입 가정)</span>`
-    + (age != null && age > 39
-      ? `<br><b style="color:var(--hot)">만 ${age}세 — 청년 유형 신청 자격이 사라집니다.</b>`
-      : (age != null && age >= 37 ? `<br><b style="color:var(--warn)">만 ${age}세 — 청년 자격(만 39세)이 얼마 안 남았습니다.</b>` : ''));
-}
-
 function renderFilters() {
-  renderFuture();
   chipRow($('#fStatus'), STATUSES, filters.status, (k) => { toggle(filters.status, k); renderAll(); });
+  chipRow($('#fTarget'), TARGETS, filters.target, (k) => { toggle(filters.target, k); renderAll(); });
   const agencies = [...new Set(listings.map(agencyOf))].sort().map((a) => ({ key: a, label: a }));
   chipRow($('#fAgency'), agencies, filters.agency, (k) => { toggle(filters.agency, k); renderAll(); });
   const gus = SEOUL_GU.filter((g) => listings.some((l) => l.gu === g)).map((g) => ({ key: g, label: g }));
@@ -570,14 +561,17 @@ const passesAgency = (l) => !filters.agency.length || filters.agency.includes(ag
 // 데이터 자체는 지우지 않는다 — 지난 공고의 당첨 커트라인이 맞춤 점수 계산에 쓰인다.
 const CLOSED_VISIBLE_DAYS = 7;
 
+// 서류심사 대상자 발표도 같은 기간만 둔다 — 서류 제출은 발표 뒤 일주일 안팎이다
 function withinClosedWindow(a) {
-  if (a.status.key !== 'done') return true;
+  if (a.status.key !== 'done' && a.status.key !== 'docs') return true;
   if (!a.status.until) return false;                    // 마감일을 모르면 오래된 것으로 본다
   return -(dayDiff(a.status.until) ?? 0) <= CLOSED_VISIBLE_DAYS;
 }
 
 function passesStatus(a) {
   if (!withinClosedWindow(a)) return false;
+  // 종료는 칩이 없다. 상태를 좁히지 않았을 때만 목록 끝에 함께 보인다
+  if (a.status.key === 'done') return STATUSES.every((s) => filters.status.includes(s.key)) || !filters.status.length;
   if (!filters.status.length) return true;
   if (filters.status.includes(a.status.key)) return true;
   const wantsOpen = filters.status.includes('live') || filters.status.includes('soon');
@@ -591,7 +585,7 @@ function passesStatus(a) {
  */
 function clearlyIneligible(l, a) {
   if (a.income?.verdict === 'over') return true;
-  const age = futureAge();
+  const age = myAgeYears();
   const youthOnly = /청년|대학생/.test(`${l.kindLabel ?? ''} ${l.name ?? ''}`);
   if (youthOnly && age != null && age > 39) return true;
   return false;
@@ -599,7 +593,9 @@ function clearlyIneligible(l, a) {
 
 /** 당첨자 발표·서류심사 안내 같은 후속 공지는 기본으로 감춘다 */
 const isRecruit = (l) => !l.noticeKind || l.noticeKind === '모집';
-const visibleKind = (l) => filters.showAnnouncements || isRecruit(l);
+// 서류심사 대상자 발표는 진행 상태 칩으로 따로 고르므로 이 토글과 무관하게 통과시킨다
+const visibleKind = (l) => filters.showAnnouncements || isRecruit(l) || isDocsNotice(l);
+const passesTarget = (l) => !filters.target.length || TARGETS.some((t) => filters.target.includes(t.key) && offersTarget(l, t));
 
 /** 검색은 공고명·자치구·유형·주소·시행사를 한꺼번에 본다 */
 const haystack = (l) =>
@@ -614,7 +610,7 @@ function renderCorners() {
   const nav = $('#corners'); nav.innerHTML = '';
   // 상태 필터만 적용한 모수로 코너별 건수를 센다 (탭을 눌러도 숫자가 흔들리지 않게)
   const pool = listings.filter((l) =>
-    visibleKind(l) && matchesQuery(l) && passesAgency(l) && passesStatus({ status: statusOf(l) }));
+    visibleKind(l) && matchesQuery(l) && passesAgency(l) && passesTarget(l) && passesStatus({ status: statusOf(l) }));
   const count = (key) => key === 'all' ? pool.length
     : key === 'scrap' ? listings.filter((l) => scraps.has(l.id)).length
     : pool.filter((l) => cornerOf(l) === key).length;
@@ -669,6 +665,7 @@ function visible() {
       if (!visibleKind(l)) return false;
       if (!matchesQuery(l)) return false;
       if (!passesAgency(l)) return false;
+      if (!passesTarget(l)) return false;
       if (!passesStatus(a)) return false;
       if (filters.corner !== 'all' && cornerOf(l) !== filters.corner) return false;
       if (filters.gu.length && !(l.gu && filters.gu.includes(l.gu))) return false;
@@ -681,7 +678,7 @@ function visible() {
     .sort((x, y) => {
       switch (filters.sort) {
         case 'deadline': {
-          const rank = (a) => a.status.key === 'live' ? 0 : a.status.key === 'soon' ? 1 : a.status.key === 'result' ? 2 : 3;
+          const rank = (a) => a.status.key === 'live' ? 0 : a.status.key === 'soon' ? 1 : a.status.key === 'result' || a.status.key === 'docs' ? 2 : 3;
           return (rank(x.a) - rank(y.a)) || ((x.a.status.d ?? 9e9) - (y.a.status.d ?? 9e9));
         }
         case 'recent': return (y.l.noticeDate || '').localeCompare(x.l.noticeDate || '');
@@ -743,7 +740,7 @@ function cardOf(l, a) {
       </div>
     </div>
     <div class="badges">
-      <span class="badge ${st.key === 'live' ? 'live' : (st.key === 'soon' || st.key === 'notice') ? 'soon' : 'done'}">${esc(st.label)}${dText ? ` · ${dText}` : ''}</span>
+      <span class="badge ${st.key === 'live' ? 'live' : (st.key === 'soon' || st.key === 'notice' || st.key === 'docs') ? 'soon' : 'done'}">${esc(st.label)}${dText ? ` · ${dText}` : ''}</span>
       <span class="badge tag">${esc(l.kindLabel)}</span>
       ${l.noticeKind && l.noticeKind !== '모집' ? `<span class="badge">${esc(l.noticeKind)}</span>` : ''}
       ${l.staleFrom ? `<span class="badge stale" title="상류 API 장애로 새로 못 받아, ${new Date(l.staleFrom).toLocaleString('ko-KR')} 자료를 그대로 보여 주는 중입니다">옛 자료</span>` : ''}
@@ -764,7 +761,7 @@ function cardOf(l, a) {
         ? (a.minMonthly != null ? `${num(a.minMonthly)}만원${a.maxMonthly !== a.minMonthly ? ` ~ ${num(a.maxMonthly)}` : ''}` : '—')
         : (a.pyeong ? `${num(a.pyeong)}만원` : '—')}</b></div>
       <div><span>전용면적</span><b>${a.minArea != null ? `${a.minArea} ~ ${a.maxArea}㎡` : '—'}</b></div>
-      <div><span>${st.key === 'notice' ? '공고일' : st.key === 'done' ? '당첨발표' : '주요 일정'}</span><b>${fmtDate(st.until)}</b></div>
+      <div><span>${st.key === 'notice' ? '공고일' : st.key === 'docs' ? '발표일' : st.key === 'done' ? '당첨발표' : '주요 일정'}</span><b>${fmtDate(st.until)}</b></div>
     </div>
     <div class="reasons">${a.reasons.slice(0, 3).map((r) => `<span class="reason${r.neg ? ' neg' : ''}">${esc(r.t)}</span>`).join('')}
       ${a.rank?.need ? `<span class="reason neg">${esc(a.rank.need)}</span>` : ''}</div>`;
@@ -876,7 +873,7 @@ function drawerHTML(l, a) {
   </h2>
   <p class="lead small">${esc(l.address || '')}</p>
   <div class="badges" style="margin-top:10px">
-    <span class="badge ${a.status.key === 'live' ? 'live' : (a.status.key === 'soon' || a.status.key === 'notice') ? 'soon' : 'done'}">${esc(a.status.label)}</span>
+    <span class="badge ${a.status.key === 'live' ? 'live' : (a.status.key === 'soon' || a.status.key === 'notice' || a.status.key === 'docs') ? 'soon' : 'done'}">${esc(a.status.label)}</span>
     <span class="badge tag">${esc(l.kindLabel)}${l.subType ? ' · ' + esc(l.subType) : ''}</span>
     ${l.totalUnits ? `<span class="badge">총 ${num(l.totalUnits)}세대</span>` : ''}
     ${l.flags?.priceCap ? '<span class="badge">분양가상한제</span>' : ''}
@@ -1483,7 +1480,7 @@ $('#fSearch').oninput = (e) => {
 $('#fSearchClear').onclick = () => { $('#fSearch').value = ''; filters.q = ''; $('#fSearchClear').hidden = true; renderAll(); };
 
 $('#fReset').onclick = () => {
-  filters = { status: ['live', 'soon', 'result', 'notice'], corner: 'all', gu: [], agency: [], q: '', sort: 'match', budgetOnly: false, eligibleOnly: false, showAnnouncements: false, incomeFitOnly: false };
+  filters = defaultFilters();
   $('#fSearch').value = '';
   $('#fSearchClear').hidden = true;
   renderAll();
