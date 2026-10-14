@@ -96,7 +96,8 @@ async function subscribers() {
   }
   try {
     const res = await fetch(`${url}/rest/v1/profiles?select=email,watch,notify_email&notify_email=eq.true`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      // 새 비밀 키(sb_secret_…)는 JWT 가 아니라 Bearer 로 보내면 거부된다. 예전 service_role 키(eyJ…)만 붙인다
+      headers: { apikey: key, ...(key.startsWith('eyJ') ? { Authorization: `Bearer ${key}` } : {}) },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const rows = await res.json();

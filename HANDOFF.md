@@ -101,6 +101,9 @@ Settings → Collaborators 에 그 계정을 추가합니다.
    `SUPABASE_URL`·`SUPABASE_SERVICE_KEY` 시크릿이 없어서, 사이트에서 메일을 남긴 사람에게는
    알림이 가지 않고 `MAIL_TO` 한 명에게만 갑니다. 워크플로 로그에
    `Supabase 설정이 없어 구독자 목록은 건너뜁니다` 로 찍힙니다.
+   고치는 법: Supabase 대시보드 → Project Settings → API Keys 의 **secret 키**(`sb_secret_…`)를
+   `gh secret set SUPABASE_SERVICE_KEY` 로, 프로젝트 주소를 `SUPABASE_URL` 로 등록합니다.
+   secret 키는 모든 행을 읽을 수 있으니 저장소·채팅에 붙이지 마세요.
 
 3. **자치구가 안 적힌 공고가 있습니다.**
    SH 게시판 목록에 구 정보가 없어서, 자치구 필터를 걸면 그 공고들이 빠집니다.
